@@ -12,6 +12,9 @@ julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
 julia> writeJLD2(genomes, fname="test_genomes.jld2")
 "test_genomes.jld2"
 
+julia> load("test_genomes.jld2")
+Test
+
 julia> load("test_genomes.jld2")["Genomes"] == genomes
 true
 
