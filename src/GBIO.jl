@@ -34,13 +34,13 @@ export writeJLD2, writedelimited, writevcf
     phenomes.traits = trials.traits
     phenomes.phenotypes = trials.phenotypes[1:n, :]
     phenomes.mask .= true
-    tebv = GBCore.analyse(trials, max_levels = 10)
+    # tebv = GBCore.analyse(trials, max_levels = 10)
 
     fname_genomes_jld2 = writeJLD2(genomes)
     fname_phenomes_jld2 = writeJLD2(phenomes)
     fname_trials_jld2 = writeJLD2(trials)
     fname_effects_jld2 = writeJLD2(effects[1])
-    fname_tebv_jld2 = writeJLD2(tebv)
+    # fname_tebv_jld2 = writeJLD2(tebv)
 
     fname_genomes_tsv = writedelimited(genomes)
     fname_phenomes_tsv = writedelimited(phenomes)
@@ -50,7 +50,7 @@ export writeJLD2, writedelimited, writevcf
     readJLD2(Phenomes, fname_phenomes_jld2)
     readJLD2(Trials, fname_trials_jld2)
     readJLD2(SimulatedEffects, fname_effects_jld2)
-    readJLD2(TEBV, fname_tebv_jld2)
+    # readJLD2(TEBV, fname_tebv_jld2)
 
     readdelimited(Genomes, fname = fname_genomes_tsv)
     # readdelimited(Phenomes, fname=fname_phenomes_tsv)
