@@ -12,10 +12,7 @@ julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
 julia> writeJLD2(genomes, fname="test_genomes.jld2")
 "test_genomes.jld2"
 
-julia> load("test_genomes.jld2")
-Test
-
-julia> load("test_genomes.jld2")["Genomes"] == genomes
+julia> load("test_genomes.jld2")["GBCore.Genomes"] == genomes
 true
 
 julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"];
@@ -23,7 +20,7 @@ julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"];
 julia> writeJLD2(phenomes, fname="test_phenomes.jld2")
 "test_phenomes.jld2"
 
-julia> load("test_phenomes.jld2")["Phenomes"] == phenomes
+julia> load("test_phenomes.jld2")["GBCore.Phenomes"] == phenomes
 true
 
 julia> trials = Trials(n=1, t=2); trials.entries = ["entry_1"];
@@ -31,7 +28,7 @@ julia> trials = Trials(n=1, t=2); trials.entries = ["entry_1"];
 julia> writeJLD2(trials, fname="test_trials.jld2")
 "test_trials.jld2"
 
-julia> load("test_trials.jld2")["Trials"] == trials
+julia> load("test_trials.jld2")["GBCore.Trials"] == trials
 true
 
 julia> simulated_effects = SimulatedEffects();
@@ -39,7 +36,7 @@ julia> simulated_effects = SimulatedEffects();
 julia> writeJLD2(simulated_effects, fname="test_simulated_effects.jld2")
 "test_simulated_effects.jld2"
 
-julia> load("test_simulated_effects.jld2")["SimulatedEffects"] == simulated_effects
+julia> load("test_simulated_effects.jld2")["GBCore.SimulatedEffects"] == simulated_effects
 true
 
 julia> trials, _simulated_effects = GBCore.simulatetrials(genomes = GBCore.simulategenomes(n=10, verbose=false), n_years=1, n_seasons=1, n_harvests=1, n_sites=1, n_replications=10, verbose=false);
@@ -49,7 +46,7 @@ julia> tebv = analyse(trials, max_levels=50, verbose=false);
 julia> writeJLD2(tebv, fname="test_tebv.jld2")
 "test_tebv.jld2"
 
-julia> load("test_tebv.jld2")["TEBV"] == tebv
+julia> load("test_tebv.jld2")["GBCore.TEBV"] == tebv
 true
 ```
 """
