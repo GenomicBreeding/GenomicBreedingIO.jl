@@ -13,3 +13,5 @@
 Manifest.toml
 docs/build/
 tmp/
+output-*
+.vscode/
