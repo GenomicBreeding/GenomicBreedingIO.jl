@@ -61,7 +61,7 @@ julia> genomes == genomes_reloaded
 true
 ```
 """
-function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", verbose::Bool=false)::Genomes
+function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", verbose::Bool = false)::Genomes
     # genomes = GBCore.simulategenomes(n=10); sep::String = "\t"; fname = writedelimited(genomes); verbose = true
     # Check input arguments
     if !isfile(fname)
@@ -228,7 +228,7 @@ julia> phenomes == phenomes_reloaded
 true
 ```
 """
-function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", verbose::Bool=false)::Phenomes
+function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", verbose::Bool = false)::Phenomes
     # type = Phenomes; phenomes = Phenomes(n=10, t=3); phenomes.entries = string.("entry_", 1:10); phenomes.traits = ["A", "B", "C"]; phenomes.phenotypes = rand(10,3); phenomes.mask .= true; fname = writedelimited(phenomes); sep = "\t"; verbose = true
     # Check input arguments
     if !isfile(fname)
@@ -368,7 +368,7 @@ julia> trials == trials_reloaded
 true
 ```
 """
-function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", verbose::Bool=false)::Trials
+function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", verbose::Bool = false)::Trials
     # type = Trials; genomes = GBCore.simulategenomes(n=10, verbose=false); trials, _ = GBCore.simulatetrials(genomes=genomes, verbose=false); fname = writedelimited(trials); sep = "\t"; verbose = false;
     # Check input arguments
     if !isfile(fname)
@@ -482,11 +482,26 @@ end
 
 
 """
+    readvcf(;fname::String, field::String = "any", verbose::Bool = false)::Genomes
 
 Load Genomes struct from vcf file
 
+# Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+
+julia> fname = writevcf(genomes);
+
+julia> genomes_reloaded = readvcf(fname=fname);
+
+julia> genomes.entries == genomes_reloaded.entries
+true
+
+julia> dimensions(genomes) == dimensions(genomes_reloaded)
+true
+```
 """
-function readvcf(fname::String; field::String="any", verbose::Bool=false)::Genomes
+function readvcf(;fname::String, field::String = "any", verbose::Bool = false)::Genomes
     # genomes = GBCore.simulategenomes(n=10); sep::String = "\t"; fname = writevcf(genomes); field = "any"; verbose = true;
     # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
     # Check input arguments
@@ -535,7 +550,9 @@ function readvcf(fname::String; field::String="any", verbose::Bool=false)::Genom
             idx = findall(.!isnothing.(match.(r"ID=GT", format_lines)))
         end
         if length(idx) == 0
-            throw(ArgumentError("The input vcf file: `" * fname * "` does not have `AF`, `AD`, or `GT` genotype fields."))
+            throw(
+                ArgumentError("The input vcf file: `" * fname * "` does not have `AF`, `AD`, or `GT` genotype fields."),
+            )
         end
     else
         idx = findall(.!isnothing.(match.(Regex(field), format_lines)))
@@ -572,12 +589,20 @@ function readvcf(fname::String; field::String="any", verbose::Bool=false)::Genom
         n_alleles = try
             parse(Int64, split(format_details[.!isnothing.(match.(r"Number=", format_details))][1], "=")[end])
         catch
-            throw(ErrorException("Error parsing the number of alleles in the `" * field * "` header line of the vcf file: `" * fname * "`"))
+            throw(
+                ErrorException(
+                    "Error parsing the number of alleles in the `" *
+                    field *
+                    "` header line of the vcf file: `" *
+                    fname *
+                    "`",
+                ),
+            )
         end
     end
     # Define the expected dimensions of the Genomes struct
     n::Int64 = length(entries)
-    p::Int64 = n_lines * n_alleles
+    p::Int64 = n_lines * (n_alleles-1)
     # Instatiate the output struct
     genomes::Genomes = Genomes(n = n, p = p)
     genomes.entries = entries
@@ -611,7 +636,7 @@ function readvcf(fname::String; field::String="any", verbose::Bool=false)::Genom
         line_counter += 1
         # Skip commented out lines including the first 2 header
         if line[1][1] != '#'
-            if (length(entries)+9) != length(line)
+            if (length(entries) + 9) != length(line)
                 throw(
                     ErrorException(
                         "The header line and line: " *
@@ -628,7 +653,15 @@ function readvcf(fname::String; field::String="any", verbose::Bool=false)::Genom
             if length(idx_field) == 0
                 continue
                 if verbose
-                    println("Field `" * field *  "` absent in line " * string(line_counter) * " of vcf file: `" * fname * "`.")
+                    println(
+                        "Field `" *
+                        field *
+                        "` absent in line " *
+                        string(line_counter) *
+                        " of vcf file: `" *
+                        fname *
+                        "`.",
+                    )
                 end
             end
             chrom = line[1]
@@ -652,15 +685,25 @@ function readvcf(fname::String; field::String="any", verbose::Bool=false)::Genom
             refalts = vcat([ref], alt)
             if field == "AD"
                 depths = try
-                    parse.(Float64, stack([split(split(x, ":")[idx_field[1]], ",") for x in line[10:end]], dims=1))
+                    parse.(Float64, stack([split(split(x, ":")[idx_field[1]], ",") for x in line[10:end]], dims = 1))
                 catch
-                    throw(ErrorException(
-                        "Cannot parse the `" * field * "` field (index=" * string(idx_field[1]) * ") at line " * string(line_counter) * " of the vcf file: `" * fname * "`."
-                    ))
+                    throw(
+                        ErrorException(
+                            "Cannot parse the `" *
+                            field *
+                            "` field (index=" *
+                            string(idx_field[1]) *
+                            ") at line " *
+                            string(line_counter) *
+                            " of the vcf file: `" *
+                            fname *
+                            "`.",
+                        ),
+                    )
                 end
             end
             if field == "GT"
-                genotype_calls = fill(0, length(line)-9, ploidy)
+                genotype_calls = fill(0, length(line) - 9, ploidy)
                 for (k, x) in enumerate(line[10:end])
                     # k, x = 1, line[10]
                     genotype_calls[k, :] = parse.(Int64, vcat(split.(split(split(x, ":")[idx_field[1]], "/"), "|")...))
@@ -680,22 +723,36 @@ function readvcf(fname::String; field::String="any", verbose::Bool=false)::Genom
                     genomes.allele_frequencies[:, i] = try
                         parse.(Float64, [split(split(x, ":")[idx_field[1]], ",")[j] for x in line[10:end]])
                     catch
-                        throw(ErrorException(
-                            "Cannot parse the `" * field * "` field (index=" * string(idx_field[1]) * ") at line " * string(line_counter) * " of the vcf file: `" * fname * "`."
-                        ))
+                        throw(
+                            ErrorException(
+                                "Cannot parse the `" *
+                                field *
+                                "` field (index=" *
+                                string(idx_field[1]) *
+                                ") at line " *
+                                string(line_counter) *
+                                " of the vcf file: `" *
+                                fname *
+                                "`.",
+                            ),
+                        )
                     end
                 elseif field == "AD"
                     # Extract from AD (allele depths) field
-                    genomes.allele_frequencies[:, i] = depths[:, j] ./ sum(depths, dims=2)[:,1]
+                    genomes.allele_frequencies[:, i] = depths[:, j] ./ sum(depths, dims = 2)[:, 1]
                 elseif field == "GT"
                     # Extract from GT (genotypes) field
-                    genomes.allele_frequencies[:, i] = sum(genotype_calls .== j, dims=2)[:,1] / ploidy
+                    genomes.allele_frequencies[:, i] = sum(genotype_calls .== j, dims = 2)[:, 1] / ploidy
                 else
-                    throw(ArgumentError("Unrecognized genotyped field: `" * field * "`. Please select `AF`, `AD` or `GT`."))
+                    throw(
+                        ArgumentError(
+                            "Unrecognized genotyped field: `" * field * "`. Please select `AF`, `AD` or `GT`.",
+                        ),
+                    )
                 end
                 if verbose
                     ProgressMeter.next!(pb)
-                end    
+                end
             end
         end
     end
@@ -711,7 +768,7 @@ function readvcf(fname::String; field::String="any", verbose::Bool=false)::Genom
             push!(duplicated_loci_alleles, locus_allele)
         end
     end
-    if length(genomes.loci_alleles) > length(unique_loci_alleles)
+    if length(duplicated_loci_alleles) > 0
         throw(
             ErrorException(
                 string(

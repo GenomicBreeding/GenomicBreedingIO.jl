@@ -336,14 +336,14 @@ Save `Genomes` struct as a variant call format (VCF version 4.2) file.
 julia> genomes_1 = GBCore.simulategenomes(n=2, verbose=false);
 
 julia> writevcf(genomes_1, fname="test_genomes_1.vcf")
-"test_genomes_1.tsv"
+"test_genomes_1.vcf"
 
 julia> genomes_2 = GBCore.simulategenomes(n=2, n_alleles=3, verbose=false);
 
 julia> genomes_2.allele_frequencies = round.(genomes_2.allele_frequencies .* 4) ./ 4;
 
 julia> writevcf(genomes_2, fname="test_genomes_2.vcf", ploidy=4)
-"test_genomes_2.tsv"
+"test_genomes_2.vcf"
 ```
 """
 function writevcf(
@@ -429,7 +429,10 @@ function writevcf(
             # Extract the genotypes
             genotypes = Int64.(allele_frequencies .* ploidy)
             # Define the GT, AD, and AF fields
-            gt_tmp = stack([join.(split.(repeat.([alleles[j]], genotypes[:, j]), ""), "/") for j in eachindex(alleles)], dims=2)
+            gt_tmp = stack(
+                [join.(split.(repeat.([alleles[j]], genotypes[:, j]), ""), "/") for j in eachindex(alleles)],
+                dims = 2,
+            )
             gt_ad_af = repeat([""], length(genomes.entries))
             for j in eachindex(gt_ad_af)
                 g = gt_tmp[j, :]
