@@ -4,6 +4,7 @@ using GBCore
 using FileIO
 using JLD2
 using Dates
+using ProgressMeter
 using PrecompileTools: @compile_workload
 
 include("reader.jl")
