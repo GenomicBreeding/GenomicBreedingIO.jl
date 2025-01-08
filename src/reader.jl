@@ -33,7 +33,7 @@ function readJLD2(type::Type{T}, fname::String = missing)::T where {T<:AbstractG
     end
     d = load(fname)
     struct_name::String = collect(keys(d))[1]
-    x::type = d[struct_name]
+    x = d[struct_name]
     if !checkdims(x)
         throw(DimensionMismatch(struct_name * " struct from the JLD2 file: " * fname * " is corrupted."))
     end
@@ -116,7 +116,7 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
     n::Int64 = length(header_1) - (IDX - 1)
     p::Int64 = n_lines
     # Instatiate the output struct
-    genomes::type = Genomes(n = n, p = p)
+    genomes = Genomes(n = n, p = p)
     genomes.entries = header_1[IDX:end]
     genomes.populations = header_2[IDX:end]
     genomes.mask .= true
@@ -148,7 +148,7 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
         line = split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the first 2 header and empty lines
-        if (line[1][1] != '#') && (line_counter > 2) && (length(line) > 0)
+        if (line[1][1] != '#') && (line_counter > 2) && (length(raw_line) > 0)
             if length(header_1) != length(line)
                 throw(
                     ErrorException(
@@ -333,7 +333,7 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
     n::Int64 = n_lines
     t::Int64 = length(header) - (IDX - 1)
     # Instatiate the output struct
-    phenomes::type = Phenomes(n = n, t = t)
+    phenomes = Phenomes(n = n, t = t)
     phenomes.traits = header[IDX:end]
     phenomes.mask .= true
     # Check for duplicate traits
@@ -364,7 +364,7 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
         line = split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the header line and empty lines
-        if (line[1][1] != '#') && (line_counter > 1) && (length(line) > 0)
+        if (line[1][1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
             if length(header) != length(line)
                 throw(
                     ErrorException(
@@ -465,7 +465,7 @@ true
 ```
 """
 function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", verbose::Bool = false)::Trials
-    # type = Trials; genomes = GBCore.simulategenomes(n=10, verbose=false); trials, _ = GBCore.simulatetrials(genomes=genomes, verbose=false); fname = writedelimited(trials); sep = "\t"; verbose = false;
+    # type = Trials; genomes = GBCore.simulategenomes(n=10, verbose=false); trials, _ = GBCore.simulatetrials(genomes=genomes, verbose=false); fname = writedelimited(trials); sep = "\t"; verbose = true;
     # Check input arguments
     if !isfile(fname)
         throw(ErrorException("The file: " * fname * " does not exist."))
@@ -515,7 +515,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
     n::Int64 = n_lines
     t::Int64 = length(header) - (IDX - 1)
     # Instatiate the output struct
-    trials::type = Trials(n = n, t = t)
+    trials = Trials(n = n, t = t)
     trials.traits = header[IDX:end]
     # Check for duplicate traits
     unique_traits::Vector{String} = unique(trials.traits)
@@ -541,11 +541,12 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
         pb = ProgressMeter.Progress(n_lines; desc = "Loading trials file: ")
     end
     for raw_line in eachline(file)
+        # raw_line = readline(file)
         # println(string("i=", i, "; line_counter=", line_counter))
         line = split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the header line and empty lines
-        if (line[1][1] != '#') && (line_counter > 1) && (length(line) > 0)
+        if (line[1][1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
             if length(header) != length(line)
                 throw(
                     ErrorException(
