@@ -70,9 +70,11 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
     # Count the number of lines in the file which are not header lines or comments
     # n_lines::Int64 = countlines(fname) # Only works if there are no comments other than the first 2 header lines
     n_lines::Int64 = 0
+    line_counter::Int64 = 0
     file = open(fname, "r")
     for raw_line in eachline(file)
-        if raw_line[1][1] != '#'
+        line_counter += 1
+        if (raw_line[1] != '#') && (line_counter > 2) && (length(raw_line) > 0)
             n_lines += 1
         end
     end
@@ -136,7 +138,7 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
         )
     end
     # Read the file line by line
-    line_counter::Int64 = 0
+    line_counter = 0
     i::Int64 = 0
     file = open(fname, "r")
     allele_frequencies::Vector{Union{Missing,Float64}} = fill(missing, n)
@@ -292,8 +294,10 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
     # Count the number of lines in the file which are not header line or comments
     n_lines::Int64 = 0
     file = open(fname, "r")
+    line_counter::Int64 = 0
     for raw_line in eachline(file)
-        if raw_line[1][1] != '#'
+        line_counter += 1
+        if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
             n_lines += 1
         end
     end
@@ -352,7 +356,7 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
         )
     end
     # Read the file line by line
-    line_counter::Int64 = 0
+    line_counter = 0
     i::Int64 = 0
     file = open(fname, "r")
     phenotypes::Vector{Union{Missing,Float64}} = fill(missing, n)
@@ -473,8 +477,10 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
     # Count the number of lines in the file which are not header line or comments
     n_lines::Int64 = 0
     file = open(fname, "r")
+    line_counter::Int64 = 0
     for raw_line in eachline(file)
-        if raw_line[1][1] != '#'
+        line_counter += 1
+        if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
             n_lines += 1
         end
     end
@@ -533,7 +539,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
         )
     end
     # Read the file line by line
-    line_counter::Int64 = 0
+    line_counter = 0
     i::Int64 = 0
     file = open(fname, "r")
     phenotypes::Vector{Union{Missing,Float64}} = fill(missing, n)
@@ -649,9 +655,11 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     end
     # Count the number of lines in the file which are not header lines or comments
     n_lines::Int64 = 0
+    line_counter::Int64 = 0
     file = open(fname, "r")
     for raw_line in eachline(file)
-        if raw_line[1][1] != '#'
+        line_counter += 1
+        if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
             n_lines += 1
         end
     end
@@ -792,7 +800,7 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         )
     end
     # Read the file line by line
-    line_counter::Int64 = 0
+    line_counter = 0
     i::Int64 = 0
     file = open(fname, "r")
     allele_frequencies::Vector{Union{Missing,Float64}} = fill(missing, n)
