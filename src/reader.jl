@@ -148,7 +148,7 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
         line = split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the first 2 header
-        if line[1][1] != '#'
+        if (line[1][1] != '#') && (line_counter > 2)
             if length(header_1) != length(line)
                 throw(
                     ErrorException(
@@ -364,7 +364,7 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
         line = split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the header line
-        if line[1][1] != '#'
+        if (line[1][1] != '#') && (line_counter > 1)
             if length(header) != length(line)
                 throw(
                     ErrorException(
@@ -545,7 +545,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
         line = split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the header line
-        if line[1][1] != '#'
+        if (line[1][1] != '#') && (line_counter > 1)
             if length(header) != length(line)
                 throw(
                     ErrorException(
