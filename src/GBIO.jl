@@ -7,9 +7,11 @@ using Dates
 using ProgressMeter
 using PrecompileTools: @compile_workload
 
+include("fuzzy_matching.jl")
 include("reader.jl")
 include("writer.jl")
 
+export levenshteindistance, isfuzzymatch
 export readJLD2, readdelimited, readvcf
 export writeJLD2, writedelimited, writevcf
 

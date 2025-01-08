@@ -12,7 +12,7 @@ julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
 julia> writeJLD2(genomes, fname="test_genomes.jld2")
 "test_genomes.jld2"
 
-julia> load("test_genomes.jld2")["GBCore.Genomes"] == genomes
+julia> load("test_genomes.jld2")["Genomes"] == genomes
 true
 
 julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"];
@@ -20,7 +20,7 @@ julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"];
 julia> writeJLD2(phenomes, fname="test_phenomes.jld2")
 "test_phenomes.jld2"
 
-julia> load("test_phenomes.jld2")["GBCore.Phenomes"] == phenomes
+julia> load("test_phenomes.jld2")["Phenomes"] == phenomes
 true
 
 julia> trials = Trials(n=1, t=2); trials.entries = ["entry_1"];
@@ -28,7 +28,7 @@ julia> trials = Trials(n=1, t=2); trials.entries = ["entry_1"];
 julia> writeJLD2(trials, fname="test_trials.jld2")
 "test_trials.jld2"
 
-julia> load("test_trials.jld2")["GBCore.Trials"] == trials
+julia> load("test_trials.jld2")["Trials"] == trials
 true
 
 julia> simulated_effects = SimulatedEffects();
@@ -36,7 +36,7 @@ julia> simulated_effects = SimulatedEffects();
 julia> writeJLD2(simulated_effects, fname="test_simulated_effects.jld2")
 "test_simulated_effects.jld2"
 
-julia> load("test_simulated_effects.jld2")["GBCore.SimulatedEffects"] == simulated_effects
+julia> load("test_simulated_effects.jld2")["SimulatedEffects"] == simulated_effects
 true
 
 julia> trials, _simulated_effects = GBCore.simulatetrials(genomes = GBCore.simulategenomes(n=10, verbose=false), n_years=1, n_seasons=1, n_harvests=1, n_sites=1, n_replications=10, verbose=false);
@@ -46,7 +46,7 @@ julia> tebv = analyse(trials, max_levels=50, verbose=false);
 julia> writeJLD2(tebv, fname="test_tebv.jld2")
 "test_tebv.jld2"
 
-julia> load("test_tebv.jld2")["GBCore.TEBV"] == tebv
+julia> load("test_tebv.jld2")["TEBV"] == tebv
 true
 ```
 """
@@ -142,7 +142,7 @@ function writedelimited(genomes::Genomes; fname::Union{Missing,String} = missing
         # Rest of the data
         for i = 1:length(genomes.loci_alleles)
             line::Vector{String} = [string(x) for x in split(genomes.loci_alleles[i], "\t")]
-            append!(line, [string(x) for x in genomes.allele_frequencies[:, i]])
+            append!(line, [ismissing(x) ? "NA" : string(x) for x in genomes.allele_frequencies[:, i]])
             line[end] *= "\n"
             write(file, join(line, sep))
         end
@@ -205,7 +205,7 @@ function writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missi
     # Write into a new text file
     open(fname, "w") do file
         # Header line
-        header::Vector{String} = ["#entry", "population"]
+        header::Vector{String} = ["#entries", "populations"]
         append!(header, phenomes.traits)
         header[end] *= "\n"
         write(file, join(header, sep))
@@ -213,7 +213,7 @@ function writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missi
         for i in eachindex(phenomes.entries)
 
             line::Vector{String} = [phenomes.entries[i], phenomes.populations[i]]
-            append!(line, string.(phenomes.phenotypes[i, :]))
+            append!(line, [ismissing(x) ? "NA" : string(x) for x in phenomes.phenotypes[i, :]])
             line[end] *= "\n"
             write(file, join(line, sep))
         end
@@ -317,7 +317,7 @@ function writedelimited(trials::Trials; fname::Union{Missing,String} = missing, 
                 trials.rows[i],
                 trials.cols[i],
             ]
-            append!(line, string.(trials.phenotypes[i, :]))
+            append!(line, [ismissing(x) ? "NA" : string(x) for x in trials.phenotypes[i, :]])
             line[end] *= "\n"
             write(file, join(line, sep))
         end
@@ -353,7 +353,7 @@ function writevcf(
     max_depth::Int64 = 100,
     n_decimal_places::Int64 = 4,
 )::String
-    # genomes = simulategenomes(n_alleles=3); fname = missing; ploidy = 0; max_depth = 100; n_decimal_places = 4;
+    # genomes = simulategenomes(n_alleles=3, sparsity=0.10); fname = missing; ploidy = 0; max_depth = 100; n_decimal_places = 4;
     # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 2) ./ 2; fname = missing; ploidy = 2; max_depth = 100; n_decimal_places = 4;
     # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = missing; ploidy = 4; max_depth = 100; n_decimal_places = 4;
     # Check input arguments
@@ -417,10 +417,17 @@ function writevcf(
             alt = split(line[5], ",")
             alleles = [split(x, "\t")[end] for x in genomes.loci_alleles[ini:fin]]
             append!(alleles, symdiff(split(locus_allele_id[3], "|"), alleles))
-            # Extract the allele frequencies and allele depths
+            # Extract the allele frequencies including all alleles
             allele_frequencies = genomes.allele_frequencies[:, ini:fin]
             allele_frequencies =
                 round.(hcat(allele_frequencies, 1.00 .- sum(allele_frequencies, dims = 2)), digits = n_decimal_places)
+            # Set missing data into zero allele frequencies
+            allele_frequencies[ismissing.(allele_frequencies)] .= 0.0
+            # Make sure the allele frequencies sum up to one per locus
+            allele_frequencies = allele_frequencies ./ sum(allele_frequencies, dims = 2)
+            # Set NaNs to zeroes. These NaNs resulted from division by zero which in turn is due to missing data.
+            allele_frequencies[isnan.(allele_frequencies)] .= 0.0
+            # Extract the allele depths
             allele_depths = Int64.(round.(allele_frequencies .* max_depth))
             # Sort according to the order of ref and alts
             idx_col_sort_af_ad = [findall(alleles .== a)[1] for a in vcat(ref, alt)]
