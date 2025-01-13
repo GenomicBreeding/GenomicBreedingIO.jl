@@ -442,6 +442,11 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
     if !checkdims(phenomes)
         throw(ErrorException("Error loading Genomes struct from the file: '" * fname * "'"))
     end
+    # Rename for operation symbol_strings into underscores in the trait names
+    symbol_strings::Vector{String} = ["+", "-", "*", "/", "%"]
+    for i in eachindex(symbol_strings)
+        phenomes.traits = replace.(phenomes.traits, symbol_strings[i] => "_")
+    end
     # Output
     phenomes
 end
@@ -618,6 +623,11 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
     close(file)
     if !checkdims(trials)
         throw(ErrorException("Error loading Genomes struct from the file: '" * fname * "'"))
+    end
+    # Rename for operation symbol_strings into underscores in the trait names
+    symbol_strings::Vector{String} = ["+", "-", "*", "/", "%"]
+    for i in eachindex(symbol_strings)
+        trials.traits = replace.(trials.traits, symbol_strings[i] => "_")
     end
     # Output
     trials
