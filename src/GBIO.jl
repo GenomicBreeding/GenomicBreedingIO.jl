@@ -58,6 +58,17 @@ export writeJLD2, writedelimited, writevcf
     readdelimited(Genomes, fname = fname_genomes_tsv)
     # readdelimited(Phenomes, fname=fname_phenomes_tsv)
     # readdelimited(Trials, fname=fname_trials_tsv)
+
+    rm.([
+        fname_genomes_jld2,
+        fname_phenomes_jld2,
+        fname_trials_jld2,
+        fname_effects_jld2,
+        # fname_tebv_jld2,
+        fname_genomes_tsv,
+        fname_phenomes_tsv,
+        fname_trials_tsv,
+    ])
 end
 
 end
