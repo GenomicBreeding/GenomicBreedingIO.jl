@@ -455,9 +455,18 @@ end
     readdelimited(type::Type{Trials}; fname::String, sep::String = "\\t")::Trials
 
 Load a `Trials` struct from a string-delimited (default=`\\t`) file. 
-Each row corresponds to a locus-allele combination.
-The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by `|`), and the specific allele.
-The subsequency columns refer to the samples, pools, entries or genotypes.
+We expect the following 10 identifier columns:
+    ‣ years
+    ‣ seasons
+    ‣ harvests
+    ‣ sites
+    ‣ entries
+    ‣ populations
+    ‣ replications
+    ‣ blocks
+    ‣ rows
+    ‣ cols
+All other columns are assumed to be numeric phenotype values.
 
 # Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
@@ -490,44 +499,40 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
         end
     end
     close(file)
+    if verbose
+        println(string("Reading a ", n_lines , "-line Trials file."))
+    end
     # Read the header line
     file = open(fname, "r")
     header::Vector{String} = split(readline(file), sep)
     close(file)
-    # Column index of the start of numeric values
-    IDX::Int64 = 11
-    # Expected header/column names
+    # Expected minimum header/column names
     expected_colnames =
         ["years", "seasons", "harvests", "sites", "entries", "populations", "replications", "blocks", "rows", "cols"]
-    if length(header) < IDX
-        throw(
-            ArgumentError(
-                "The trials file `" *
-                fname *
-                "` have less than " *
-                string(IDX) *
-                " columns. We expect in order the following column names: \n\t• " *
-                join(expected_colnames, "\n\t• "),
-            ),
-        )
+    idx_expected_colnames = []
+    for name in expected_colnames
+        # name = expected_colnames[4]
+        idx = findall(isfuzzymatch.(header, name))
+        if length(idx) == 0
+            throw(ArgumentError("We cannot find the required identifier column: `" * name * "` in the header line."))
+        elseif length(idx) > 1
+            levdist = [levenshteindistance(name, header[ix]) for ix in idx]
+            idx = idx[findall(levdist .== minimum(levdist))[1]]
+        else
+            idx = idx[1]
+        end
+        if (length(idx_expected_colnames) > 0) && (sum(idx_expected_colnames .== idx) > 0)
+            throw(ArgumentError("The identifier column for: `" * name * "` in the header line may have been misspelled."))
+        end
+        append!(idx_expected_colnames, idx)
     end
-    idx_mismatch = findall(.!isfuzzymatch.(expected_colnames, header[1:(IDX-1)]))
-    if length(idx_mismatch) > 0
-        throw(
-            ArgumentError(
-                "The trials file `" *
-                fname *
-                "` have the following expected column name mismatches: \n\t• " *
-                join(string.(expected_colnames[idx_mismatch], " <=> ", header[1:(IDX-1)][idx_mismatch]), "\n\t• "),
-            ),
-        )
-    end
+    idx_traits = setdiff(collect(1:length(header)), idx_expected_colnames)
     # Define the expected dimensions of the Trials struct
     n::Int64 = n_lines
-    t::Int64 = length(header) - (IDX - 1)
+    t::Int64 = length(header) - length(expected_colnames)
     # Instatiate the output struct
     trials = Trials(n = n, t = t)
-    trials.traits = header[IDX:end]
+    trials.traits = header[idx_traits]
     # Check for duplicate traits
     unique_traits::Vector{String} = unique(trials.traits)
     duplicated_traits::Vector{String} = []
@@ -545,7 +550,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
     end
     # Read the file line by line
     line_counter = 0
-    i::Int64 = 0
+    i = 0
     file = open(fname, "r")
     phenotypes::Vector{Union{Missing,Float64}} = fill(missing, n)
     if verbose
@@ -570,31 +575,32 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
                 )
             end
             i += 1
-            trials.years[i] = line[1]
-            trials.seasons[i] = line[2]
-            trials.harvests[i] = line[3]
-            trials.sites[i] = line[4]
-            trials.entries[i] = line[5]
-            trials.populations[i] = line[6]
-            trials.replications[i] = line[7]
-            trials.blocks[i] = line[8]
-            trials.rows[i] = line[9]
-            trials.cols[i] = line[10]
+            trials.years[i] = line[idx_expected_colnames[1]]
+            trials.seasons[i] = line[idx_expected_colnames[2]]
+            trials.harvests[i] = line[idx_expected_colnames[3]]
+            trials.sites[i] = line[idx_expected_colnames[4]]
+            trials.entries[i] = line[idx_expected_colnames[5]]
+            trials.populations[i] = line[idx_expected_colnames[6]]
+            trials.replications[i] = line[idx_expected_colnames[7]]
+            trials.blocks[i] = line[idx_expected_colnames[8]]
+            trials.rows[i] = line[idx_expected_colnames[9]]
+            trials.cols[i] = line[idx_expected_colnames[10]]
             # Catch missing phenotypes and convert to -999 for parsing
             bool_missing =
-                (line[IDX:end] .== "missing") .||
-                (line[IDX:end] .== "NA") .||
-                (line[IDX:end] .== "na") .||
-                (line[IDX:end] .== "N/A") .||
-                (line[IDX:end] .== "n/a") .||
-                (line[IDX:end] .== "")
+                (line[idx_traits] .== "missing") .||
+                (line[idx_traits] .== "NA") .||
+                (line[idx_traits] .== "na") .||
+                (line[idx_traits] .== "N/A") .||
+                (line[idx_traits] .== "n/a") .||
+                (line[idx_traits] .== "")
             idx_missing = findall(bool_missing)
-            # idx_non_missing = findall(.!bool_missing)
+            # Temporarily set missing values to -999 for vectorised string to numeric parsing.
+            # Note that the value is irrelevant as we will use the missing values indexes to convert them into missing - so fret not.
             if length(idx_missing) > 0
-                line[collect(IDX:end)[idx_missing]] .= "-999"
+                line[collect(idx_traits)[idx_missing]] .= "-999"
             end
             phenotypes = try
-                parse.(Float64, line[IDX:end])
+                parse.(Float64, line[idx_traits])
             catch
                 throw(
                     ErrorException(
