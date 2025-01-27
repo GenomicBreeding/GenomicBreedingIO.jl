@@ -27,7 +27,7 @@ julia> phenomes_reloaded = load("test_phenomes.jld2");
 julia> phenomes_reloaded[collect(keys(phenomes_reloaded))[1]] == phenomes
 true
 
-julia> trials = Trials(n=1, t=2); trials.entries = ["entry_1"];
+julia> trials, _ = simulatetrials(genomes=genomes, verbose=false);
 
 julia> writeJLD2(trials, fname="test_trials.jld2")
 "test_trials.jld2"

@@ -19,7 +19,7 @@ julia> fname = writeJLD2(phenomes);
 julia> readJLD2(Phenomes, fname) == phenomes
 true
 
-julia> trials = Trials(n=1, t=2); trials.entries = ["entry_1"];
+julia> trials, _ = simulatetrials(genomes=genomes, verbose=false);
 
 julia> fname = writeJLD2(trials);
 
