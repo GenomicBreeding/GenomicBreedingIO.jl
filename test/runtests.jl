@@ -15,8 +15,7 @@ Documenter.doctest(GBIO)
     phenomes.mask .= true
     fname = writeJLD2(phenomes)
     @test readJLD2(Phenomes, fname) == phenomes
-    trials = Trials(n = 1, t = 2)
-    trials.entries = ["entry_1"]
+    trials, _ = simulatetrials(genomes = genomes, verbose = false)
     fname = writeJLD2(trials)
     @test readJLD2(Trials, fname) == trials
     fname = writedelimited(genomes)

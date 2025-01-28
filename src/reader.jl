@@ -5,7 +5,7 @@ Load a core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects
 
 ## Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=2, sparsity=0.01, verbose=false);
+julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
 
 julia> fname = writeJLD2(genomes);
 
@@ -51,7 +51,7 @@ The subsequency columns refer to the samples, pools, entries or genotypes.
 
 # Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, sparsity=0.1, verbose=false);
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writedelimited(genomes);
 
@@ -500,7 +500,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
     end
     close(file)
     if verbose
-        println(string("Reading a ", n_lines , "-line Trials file."))
+        println(string("Reading a ", n_lines, "-line Trials file."))
     end
     # Read the header line
     file = open(fname, "r")
@@ -522,7 +522,9 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
             idx = idx[1]
         end
         if (length(idx_expected_colnames) > 0) && (sum(idx_expected_colnames .== idx) > 0)
-            throw(ArgumentError("The identifier column for: `" * name * "` in the header line may have been misspelled."))
+            throw(
+                ArgumentError("The identifier column for: `" * name * "` in the header line may have been misspelled."),
+            )
         end
         append!(idx_expected_colnames, idx)
     end
@@ -646,7 +648,7 @@ Load Genomes struct from vcf file
 
 # Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, sparsity=0.1, verbose=false);
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
