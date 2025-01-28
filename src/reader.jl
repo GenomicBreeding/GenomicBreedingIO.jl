@@ -49,6 +49,13 @@ Each row corresponds to a locus-allele combination.
 The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by `|`), and the specific allele.
 The subsequency columns refer to the samples, pools, entries or genotypes.
 
+# Notes:
+- Extension name should be '.tsv', '.csv', or '.txt'.
+- Header lines and comments are prefixed by '#'.
+- There are 2 header lines prefixed by '#', e.g.:
+    + header line 1: "chrom,pos,all_alleles,allele,entry_1,entry_2"
+    + header line 2: "chrom,pos,all_alleles,allele,population_1,population_1"
+
 # Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
 julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
@@ -124,10 +131,12 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
     genomes.mask .= true
     # Check for duplicate entries
     unique_entries::Vector{String} = unique(genomes.entries)
+    sorted_entries = sort(genomes.entries)
     duplicated_entries::Vector{String} = []
-    for entry in unique_entries
-        if sum(genomes.entries .== entry) > 1
-            push!(duplicated_entries, entry)
+    for i = 2:length(sorted_entries)
+        if sorted_entries[i-1] == sorted_entries[i]
+            println(sorted_entries[i-1])
+            push!(duplicated_entries, sorted_entries[i-1])
         end
     end
     if length(genomes.entries) > length(unique_entries)
@@ -145,9 +154,10 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
     if verbose
         pb = ProgressMeter.Progress(n_lines; desc = "Loading genotype file: ")
     end
+    line::Vector{String} = repeat([""], length(header_1))
     for raw_line in eachline(file)
         # println(string("i=", i, "; line_counter=", line_counter))
-        line = split(raw_line, sep)
+        line .= split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the first 2 header and empty lines
         if (line[1][1] != '#') && (line_counter > 2) && (length(raw_line) > 0)
@@ -239,10 +249,12 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
     close(file)
     # Checks
     unique_loci_alleles::Vector{String} = unique(genomes.loci_alleles)
+    sorted_loci_alleles = sort(genomes.loci_alleles)
     duplicated_loci_alleles::Vector{String} = []
-    for locus_allele in unique_loci_alleles
-        if sum(genomes.loci_alleles .== locus_allele) > 1
-            push!(duplicated_loci_alleles, locus_allele)
+    for i = 2:length(sorted_loci_alleles)
+        if sorted_loci_alleles[i-1] == sorted_loci_alleles[i]
+            println(sorted_loci_alleles[i-1])
+            push!(duplicated_loci_alleles, sorted_loci_alleles[i-1])
         end
     end
     if length(genomes.loci_alleles) > length(unique_loci_alleles)
@@ -359,13 +371,14 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
     line_counter = 0
     i::Int64 = 0
     file = open(fname, "r")
+    line::Vector{String} = repeat([""], length(header))
     phenotypes::Vector{Union{Missing,Float64}} = fill(missing, n)
     if verbose
         pb = ProgressMeter.Progress(n_lines; desc = "Loading phenotype file: ")
     end
     for raw_line in eachline(file)
         # println(string("i=", i, "; line_counter=", line_counter))
-        line = split(raw_line, sep)
+        line .= split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the header line and empty lines
         if (line[1][1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
@@ -554,6 +567,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
     line_counter = 0
     i = 0
     file = open(fname, "r")
+    line::Vector{String} = repeat([""], length(header))
     phenotypes::Vector{Union{Missing,Float64}} = fill(missing, n)
     if verbose
         pb = ProgressMeter.Progress(n_lines; desc = "Loading trials file: ")
@@ -561,7 +575,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
     for raw_line in eachline(file)
         # raw_line = readline(file)
         # println(string("i=", i, "; line_counter=", line_counter))
-        line = split(raw_line, sep)
+        line .= split(raw_line, sep)
         line_counter += 1
         # Skip commented out lines including the header line and empty lines
         if (line[1][1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
