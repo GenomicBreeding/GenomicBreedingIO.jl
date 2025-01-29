@@ -666,29 +666,42 @@ julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
+julia> fname_gz = writevcf(genomes, gzip=true);
+
 julia> genomes_reloaded = readvcf(fname=fname);
 
-julia> genomes.entries == genomes_reloaded.entries
+julia> genomes_reloaded_gz = readvcf(fname=fname_gz);
+
+julia> genomes.entries == genomes_reloaded.entries == genomes_reloaded_gz.entries
 true
 
-julia> dimensions(genomes) == dimensions(genomes_reloaded)
+julia> dimensions(genomes) == dimensions(genomes_reloaded) == dimensions(genomes_reloaded_gz)
 true
 
-julia> ismissing.(genomes.allele_frequencies) == ismissing.(genomes_reloaded.allele_frequencies)
+julia> ismissing.(genomes.allele_frequencies) == ismissing.(genomes_reloaded.allele_frequencies) == ismissing.(genomes_reloaded_gz.allele_frequencies)
 true
 ```
 """
 function readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
-    # genomes = GBCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes); field = "any"; verbose = true;
+    # genomes = GBCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
     # genomes = simulategenomes(n_alleles=3, sparsity=0.1); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
     # Check input arguments
     if !isfile(fname)
         throw(ErrorException("The file: " * fname * " does not exist."))
     end
+    gzip = if split(fname, ".")[(end-1):end] == ["vcf", "gz"]
+        true
+    else
+        false
+    end
     # Count the number of lines in the file which are not header lines or comments
     n_lines::Int64 = 0
     line_counter::Int64 = 0
-    file = open(fname, "r")
+    file = if gzip
+        GZip.open(fname, "r")
+    else
+        open(fname, "r")
+    end
     for raw_line in eachline(file)
         line_counter += 1
         if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
@@ -697,7 +710,11 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     end
     close(file)
     # Capture the header containing the names of the entries
-    file = open(fname, "r")
+    file = if gzip
+        GZip.open(fname, "r")
+    else
+        open(fname, "r")
+    end
     header_line = ""
     for raw_line in eachline(file)
         if !isnothing(match(r"^#CHR", raw_line))
@@ -737,7 +754,11 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     # Extract the names of the entries or samples
     entries = header[IDX:end]
     # Capture the header lines containing the format fields
-    file = open(fname, "r")
+    file = if gzip
+        GZip.open(fname, "r")
+    else
+        open(fname, "r")
+    end
     format_lines::Vector{String} = []
     for raw_line in eachline(file)
         if !isnothing(match(r"^##FORMAT", raw_line))
@@ -775,7 +796,11 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     ploidy = 0 # only for "GT" field - not used for "AD" and "AF" fields
     if field == "GT"
         # Computationally expensive allele counting for field=="GT":
-        file = open(fname, "r")
+        file = if gzip
+            GZip.open(fname, "r")
+        else
+            open(fname, "r")
+        end
         for raw_line in eachline(file)
             line = split(raw_line, "\t")
             if line[1][1] == '#'
@@ -809,10 +834,10 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         end
     end
     # Define the expected dimensions of the Genomes struct
-    n::Int64 = length(entries)
-    p::Int64 = n_lines * (n_alleles - 1)
+    n = length(entries)
+    p = n_lines * (n_alleles - 1)
     # Instatiate the output struct
-    genomes::Genomes = Genomes(n = n, p = p)
+    genomes = Genomes(n = n, p = p)
     genomes.entries = entries
     genomes.populations .= "unknown"
     genomes.mask .= true
@@ -834,17 +859,21 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     # Read the file line by line
     line_counter = 0
     i::Int64 = 0
-    file = open(fname, "r")
+    line::Vector{String} = repeat([""], n + 9)
+    file = if gzip
+        GZip.open(fname, "r")
+    else
+        open(fname, "r")
+    end
     allele_frequencies::Vector{Union{Missing,Float64}} = fill(missing, n)
     if verbose
         pb = ProgressMeter.Progress(p; desc = "Loading genotypes from vcf file: ")
     end
     for raw_line in eachline(file)
         # raw_line = readline(file)
-        line = split(raw_line, "\t")
         line_counter += 1
         # Skip commented out lines including the first 2 header
-        if line[1][1] != '#'
+        if raw_line[1] != '#'
             if (length(entries) + 9) != length(line)
                 throw(
                     ErrorException(
@@ -856,6 +885,7 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
                     ),
                 )
             end
+            line .= split(raw_line, "\t")
             # Find the field from which we will extract the allele frequencies from
             idx_field = findall(split(line[9], ":") .== field)
             # Skip the line if the field is absent

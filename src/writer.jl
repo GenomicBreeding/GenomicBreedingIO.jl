@@ -85,7 +85,6 @@ function writeJLD2(A::AbstractGB; fname::Union{Missing,String} = missing)::Strin
     return fname
 end
 
-
 """
     writedelimited(genomes::Genomes, sep::String = "\t", fname::Union{Missing,String} = missing)::String
 
@@ -159,7 +158,6 @@ function writedelimited(genomes::Genomes; fname::Union{Missing,String} = missing
     end
     return fname
 end
-
 
 """
     writedelimited(phenomes::Phenomes, sep::String = "\t", fname::Union{Missing,String} = missing)::String
@@ -354,6 +352,11 @@ julia> genomes_2.allele_frequencies = round.(genomes_2.allele_frequencies .* 4) 
 
 julia> writevcf(genomes_2, fname="test_genomes_2.vcf", ploidy=4)
 "test_genomes_2.vcf"
+
+julia> genomes_3 = GBCore.simulategenomes(n=3, verbose=false);
+
+julia> writevcf(genomes_3, fname="test_genomes_3.vcf", gzip=true)
+"test_genomes_3.vcf.gz"
 ```
 """
 function writevcf(
@@ -362,10 +365,11 @@ function writevcf(
     ploidy::Int64 = 0,
     max_depth::Int64 = 100,
     n_decimal_places::Int64 = 4,
+    gzip::Bool = false,
 )::String
-    # genomes = simulategenomes(n_alleles=3, sparsity=0.10); fname = missing; ploidy = 0; max_depth = 100; n_decimal_places = 4;
-    # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 2) ./ 2; fname = missing; ploidy = 2; max_depth = 100; n_decimal_places = 4;
-    # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = missing; ploidy = 4; max_depth = 100; n_decimal_places = 4;
+    # genomes = simulategenomes(n_alleles=3, sparsity=0.10); fname = missing; ploidy = 0; max_depth = 100; n_decimal_places = 4; gzip = true;
+    # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 2) ./ 2; fname = missing; ploidy = 2; max_depth = 100; n_decimal_places = 4; gzip = true;
+    # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = missing; ploidy = 4; max_depth = 100; n_decimal_places = 4; gzip = true;
     # Check input arguments
     if !checkdims(genomes)
         throw(DimensionMismatch("Genomes input is corrupted."))
@@ -402,78 +406,93 @@ function writevcf(
         "",
     ]
     # Write into a new text file
-    open(fname, "w") do file
-        # Header lines
+    file = if gzip
+        fname = if split(fname, ".")[end] == "vcf"
+            replace(fname, ".vcf" => ".vcf.gz")
+        end
+        GZip.open(fname, "w")
+    else
+        FileIO.open(fname, "w")
+    end
+    # Header lines
+    if gzip
+        GZip.write(file, join(header_lines, "\n"))
+    else
         write(file, join(header_lines, "\n"))
-        # Rest of the data
-        locus_allele_id::Vector{String} = repeat([""], 4)
-        line::Vector{String} = repeat([""], length(genomes.entries) + 9)
-        for i in eachindex(loci_ini_idx)
-            # i = 2
-            ini = loci_ini_idx[i]
-            fin = loci_fin_idx[i]
-            locus_allele_id .= [string(x) for x in split(genomes.loci_alleles[ini], "\t")]
-            line[1] = locus_allele_id[1]
-            line[2] = locus_allele_id[2]
-            line[3] = replace(genomes.loci_alleles[ini], "\t" => "_")
-            line[4] = split(locus_allele_id[3], "|")[1]
-            line[5] = join(split(locus_allele_id[3], "|")[2:end], ",")
-            line[6] = "."
-            line[7] = "."
-            line[8] = string("NS=", sum(.!ismissing.(genomes.allele_frequencies[:, i])))
-            line[9] = "GT:AD:AF"
-            # Identify order of the alleles in the vcf output and in the genomes input
-            ref = line[4]
-            alt = split(line[5], ",")
-            alleles = [split(x, "\t")[end] for x in genomes.loci_alleles[ini:fin]]
-            append!(alleles, symdiff(split(locus_allele_id[3], "|"), alleles))
-            # Extract the allele frequencies including all alleles
-            allele_frequencies = genomes.allele_frequencies[:, ini:fin]
-            allele_frequencies =
-                round.(hcat(allele_frequencies, 1.00 .- sum(allele_frequencies, dims = 2)), digits = n_decimal_places)
-            # Set missing data into zero allele frequencies
-            allele_frequencies[ismissing.(allele_frequencies)] .= 0.0
-            # Make sure the allele frequencies sum up to one per locus
-            allele_frequencies = allele_frequencies ./ sum(allele_frequencies, dims = 2)
-            # Set NaNs to zeroes. These NaNs resulted from division by zero which in turn is due to missing data.
-            allele_frequencies[isnan.(allele_frequencies)] .= 0.0
-            # Extract the allele depths
-            allele_depths = Int64.(round.(allele_frequencies .* max_depth))
-            # Sort according to the order of ref and alts
-            idx_col_sort_af_ad = [findall(alleles .== a)[1] for a in vcat(ref, alt)]
-            allele_frequencies = allele_frequencies[:, idx_col_sort_af_ad]
-            allele_depths = allele_depths[:, idx_col_sort_af_ad]
-            # Extract the genotypes
-            genotypes = Int64.(allele_frequencies .* ploidy)
-            # Define the GT, AD, and AF fields
-            gt_tmp = stack(
-                [join.(split.(repeat.([alleles[j]], genotypes[:, j]), ""), "/") for j in eachindex(alleles)],
-                dims = 2,
-            )
-            gt_ad_af = repeat([""], length(genomes.entries))
-            for j in eachindex(gt_ad_af)
-                g = gt_tmp[j, :]
-                g = g[g.!=""]
-                g = replace.(g, ref => "0")
-                for k in eachindex(alt)
-                    g = replace.(g, alt[k] => string(k))
-                end
-                if length(g) > 0
-                    # Sort GT labels so that the values are increasing and then join
-                    g = split(join(g, "/"), "/")
-                    sort!(g)
-                    gt_ad_af[j] = join(g, "/")
-                else
-                    # Missing GT field
-                    gt_ad_af[j] = "./."
-                end
-                gt_ad_af[j] = string(gt_ad_af[j], ":", join(allele_depths[j, :], ","))
-                gt_ad_af[j] = string(gt_ad_af[j], ":", join(allele_frequencies[j, :], ","))
+    end
+    # Rest of the data
+    locus_allele_id::Vector{String} = repeat([""], 4)
+    line::Vector{String} = repeat([""], length(genomes.entries) + 9)
+    for i in eachindex(loci_ini_idx)
+        # i = 2
+        ini = loci_ini_idx[i]
+        fin = loci_fin_idx[i]
+        locus_allele_id .= [string(x) for x in split(genomes.loci_alleles[ini], "\t")]
+        line[1] = locus_allele_id[1]
+        line[2] = locus_allele_id[2]
+        line[3] = replace(genomes.loci_alleles[ini], "\t" => "_")
+        line[4] = split(locus_allele_id[3], "|")[1]
+        line[5] = join(split(locus_allele_id[3], "|")[2:end], ",")
+        line[6] = "."
+        line[7] = "."
+        line[8] = string("NS=", sum(.!ismissing.(genomes.allele_frequencies[:, i])))
+        line[9] = "GT:AD:AF"
+        # Identify order of the alleles in the vcf output and in the genomes input
+        ref = line[4]
+        alt = split(line[5], ",")
+        alleles = [split(x, "\t")[end] for x in genomes.loci_alleles[ini:fin]]
+        append!(alleles, symdiff(split(locus_allele_id[3], "|"), alleles))
+        # Extract the allele frequencies including all alleles
+        allele_frequencies = genomes.allele_frequencies[:, ini:fin]
+        allele_frequencies =
+            round.(hcat(allele_frequencies, 1.00 .- sum(allele_frequencies, dims = 2)), digits = n_decimal_places)
+        # Set missing data into zero allele frequencies
+        allele_frequencies[ismissing.(allele_frequencies)] .= 0.0
+        # Make sure the allele frequencies sum up to one per locus
+        allele_frequencies = allele_frequencies ./ sum(allele_frequencies, dims = 2)
+        # Set NaNs to zeroes. These NaNs resulted from division by zero which in turn is due to missing data.
+        allele_frequencies[isnan.(allele_frequencies)] .= 0.0
+        # Extract the allele depths
+        allele_depths = Int64.(round.(allele_frequencies .* max_depth))
+        # Sort according to the order of ref and alts
+        idx_col_sort_af_ad = [findall(alleles .== a)[1] for a in vcat(ref, alt)]
+        allele_frequencies = allele_frequencies[:, idx_col_sort_af_ad]
+        allele_depths = allele_depths[:, idx_col_sort_af_ad]
+        # Extract the genotypes
+        genotypes = Int64.(allele_frequencies .* ploidy)
+        # Define the GT, AD, and AF fields
+        gt_tmp = stack(
+            [join.(split.(repeat.([alleles[j]], genotypes[:, j]), ""), "/") for j in eachindex(alleles)],
+            dims = 2,
+        )
+        gt_ad_af = repeat([""], length(genomes.entries))
+        for j in eachindex(gt_ad_af)
+            g = gt_tmp[j, :]
+            g = g[g.!=""]
+            g = replace.(g, ref => "0")
+            for k in eachindex(alt)
+                g = replace.(g, alt[k] => string(k))
             end
-            line[10:end] = gt_ad_af
-            line[end] *= "\n"
+            if length(g) > 0
+                # Sort GT labels so that the values are increasing and then join
+                g = split(join(g, "/"), "/")
+                sort!(g)
+                gt_ad_af[j] = join(g, "/")
+            else
+                # Missing GT field
+                gt_ad_af[j] = "./."
+            end
+            gt_ad_af[j] = string(gt_ad_af[j], ":", join(allele_depths[j, :], ","))
+            gt_ad_af[j] = string(gt_ad_af[j], ":", join(allele_frequencies[j, :], ","))
+        end
+        line[10:end] = gt_ad_af
+        line[end] *= "\n"
+        if gzip
+            GZip.write(file, join(line, "\t"))
+        else
             write(file, join(line, "\t"))
         end
     end
+    close(file)
     return fname
 end

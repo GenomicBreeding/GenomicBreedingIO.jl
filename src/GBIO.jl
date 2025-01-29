@@ -3,6 +3,7 @@ module GBIO
 using GBCore
 using FileIO
 using JLD2
+using GZip
 using Dates
 using ProgressMeter
 using PrecompileTools: @compile_workload
