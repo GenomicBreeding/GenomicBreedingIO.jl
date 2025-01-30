@@ -4,6 +4,7 @@ authors = ["jeffersonparil@gmail.com"]
 version = "1.0.0-DEV"
 
 [deps]
+CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
@@ -21,6 +22,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 GBCore = {rev = "main", url = "https://github.com/GenomicBreeding/GBCore.jl"}
 
 [compat]
+CodecZlib = "0.7.6"
 DataFrames = "1.7.0"
 Dates = "1.11.0"
 Documenter = "1.8.0"

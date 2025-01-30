@@ -8,7 +8,7 @@ end
 using GBIO
 using GBCore
 using FileIO
-using JLD2
+using JLD2, CodecZlib
 using GZip
 using Dates
 using ProgressMeter
