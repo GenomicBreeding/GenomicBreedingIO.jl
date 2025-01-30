@@ -1,5 +1,5 @@
 """
-    readJLD2(type::Type, fname::String = missing)::Type
+    readjld2(type::Type; fname::String)::Type
 
 Load a core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects`), and model (`TEBV`) struct from a JLD2 file.
 
@@ -7,27 +7,27 @@ Load a core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects
 ```jldoctest; setup = :(using GBCore, GBIO)
 julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
 
-julia> fname = writeJLD2(genomes);
+julia> fname = writejld2(genomes);
 
-julia> readJLD2(Genomes, fname) == genomes
+julia> readjld2(Genomes, fname=fname) == genomes
 true
 
 julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"];
 
-julia> fname = writeJLD2(phenomes);
+julia> fname = writejld2(phenomes);
 
-julia> readJLD2(Phenomes, fname) == phenomes
+julia> readjld2(Phenomes, fname=fname) == phenomes
 true
 
 julia> trials, _ = simulatetrials(genomes=genomes, verbose=false);
 
-julia> fname = writeJLD2(trials);
+julia> fname = writejld2(trials);
 
-julia> readJLD2(Trials, fname) == trials
+julia> readjld2(Trials, fname=fname) == trials
 true
 ```
 """
-function readJLD2(type::Type{T}, fname::String = missing)::T where {T<:AbstractGB}
+function readjld2(type::Type{T}; fname::String)::T where {T<:AbstractGB}
     if !isfile(fname)
         throw(ArgumentError("JLD2 file: " * fname * " does not exist."))
     end

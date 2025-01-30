@@ -13,8 +13,8 @@ include("reader.jl")
 include("writer.jl")
 
 export levenshteindistance, isfuzzymatch
-export readJLD2, readdelimited, readvcf
-export writeJLD2, writedelimited, writevcf
+export readjld2, readdelimited, readvcf
+export writejld2, writedelimited, writevcf
 
 # # Precompile
 # @compile_workload begin
@@ -40,21 +40,21 @@ export writeJLD2, writedelimited, writevcf
 #     phenomes.mask .= true
 #     # tebv = GBCore.analyse(trials, max_levels = 10)
 
-#     fname_genomes_jld2 = writeJLD2(genomes)
-#     fname_phenomes_jld2 = writeJLD2(phenomes)
-#     fname_trials_jld2 = writeJLD2(trials)
-#     fname_effects_jld2 = writeJLD2(effects[1])
-#     # fname_tebv_jld2 = writeJLD2(tebv)
+#     fname_genomes_jld2 = writejld2(genomes)
+#     fname_phenomes_jld2 = writejld2(phenomes)
+#     fname_trials_jld2 = writejld2(trials)
+#     fname_effects_jld2 = writejld2(effects[1])
+#     # fname_tebv_jld2 = writejld2(tebv)
 
 #     fname_genomes_tsv = writedelimited(genomes)
 #     fname_phenomes_tsv = writedelimited(phenomes)
 #     fname_trials_tsv = writedelimited(trials)
 
-#     readJLD2(Genomes, fname_genomes_jld2)
-#     readJLD2(Phenomes, fname_phenomes_jld2)
-#     readJLD2(Trials, fname_trials_jld2)
-#     readJLD2(SimulatedEffects, fname_effects_jld2)
-#     # readJLD2(TEBV, fname_tebv_jld2)
+#     readjld2(Genomes, fname_genomes_jld2)
+#     readjld2(Phenomes, fname_phenomes_jld2)
+#     readjld2(Trials, fname_trials_jld2)
+#     readjld2(SimulatedEffects, fname_effects_jld2)
+#     # readjld2(TEBV, fname_tebv_jld2)
 
 #     readdelimited(Genomes, fname = fname_genomes_tsv)
 #     # readdelimited(Phenomes, fname=fname_phenomes_tsv)

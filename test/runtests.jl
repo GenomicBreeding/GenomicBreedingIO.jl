@@ -7,17 +7,17 @@ Documenter.doctest(GBIO)
 
 @testset "GBIO.jl" begin
     genomes = GBCore.simulategenomes(n = 2, verbose = false)
-    fname = writeJLD2(genomes)
-    @test readJLD2(Genomes, fname) == genomes
+    fname = writejld2(genomes)
+    @test readjld2(Genomes, fname = fname) == genomes
     phenomes = Phenomes(n = 2, t = 2)
     phenomes.entries = ["entry_1", "entry_2"]
     phenomes.traits = ["trait_1", "trait_2"]
     phenomes.mask .= true
-    fname = writeJLD2(phenomes)
-    @test readJLD2(Phenomes, fname) == phenomes
+    fname = writejld2(phenomes)
+    @test readjld2(Phenomes, fname = fname) == phenomes
     trials, _ = simulatetrials(genomes = genomes, verbose = false)
-    fname = writeJLD2(trials)
-    @test readJLD2(Trials, fname) == trials
+    fname = writejld2(trials)
+    @test readjld2(Trials, fname = fname) == trials
     fname = writedelimited(genomes)
     genomes_reloaded = readdelimited(Genomes, fname = fname)
     @test genomes == genomes_reloaded
