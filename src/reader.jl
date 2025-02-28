@@ -682,19 +682,22 @@ julia> ismissing.(genomes.allele_frequencies) == ismissing.(genomes_reloaded.all
 true
 ```
 """
-function readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
+function GBIO.readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
     # genomes = GBCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
     # genomes = simulategenomes(n_alleles=3, sparsity=0.1); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
     # Check input arguments
     if !isfile(fname)
         throw(ErrorException("The file: " * fname * " does not exist."))
     end
-    gzip = if split(fname, ".")[(end-1):end] == ["vcf", "gz"]
+    gzip = if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
         true
     else
         false
     end
     # Count the number of lines in the file which are not header lines or comments
+    if verbose
+        println("Counting loci...")
+    end
     n_lines::Int64 = 0
     line_counter::Int64 = 0
     file = if gzip
@@ -703,13 +706,61 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         open(fname, "r")
     end
     for raw_line in eachline(file)
+        # raw_line = readline(file)
         line_counter += 1
         if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
             n_lines += 1
         end
     end
     close(file)
+    if verbose
+        println(string("Total number of lines: ", line_counter))
+        println(string("Total number of loci: ", n_lines))
+    end
+    # Find location of each file chunk for multi-threaded parsing
+    if verbose
+        println("Counting threads and identifying the file positions and loci indexes per thread...")
+    end
+    n_threads = Threads.nthreads()
+    n_lines_per_thread = Int(round(n_lines / n_threads))
+    idx_loci_per_thread_ini = vcat([0], cumsum(repeat([n_lines_per_thread], n_threads-1)))
+    idx_loci_per_thread_fin = idx_loci_per_thread_ini .+ (n_lines_per_thread - 1)
+    idx_loci_per_thread_fin[end] = n_lines
+    file_pos_per_thread_ini = []
+    file_pos_per_thread_fin = []
+    file = if gzip
+        GZip.open(fname, "r")
+    else
+        open(fname, "r")
+    end
+    counter::Int64 = 0
+    previous_pos = position(file)
+    for raw_line in eachline(file)
+        # raw_line = readline(file)
+        if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
+            counter += 1
+            if counter == 1
+                append!(file_pos_per_thread_ini, previous_pos)
+            end
+            if counter == n_lines_per_thread
+                append!(file_pos_per_thread_fin, position(file))
+                counter = 0
+            end
+        end
+        previous_pos = position(file)
+    end
+    if length(file_pos_per_thread_fin) == (n_threads - 1)
+        seekend(file)
+        append!(file_pos_per_thread_fin, position(file))
+    end
+    close(file)
+    if verbose
+        println(string("Total number of threads: ", n_threads))
+    end
     # Capture the header containing the names of the entries
+    if verbose
+        println("Extracting the names of the entries...")
+    end
     file = if gzip
         GZip.open(fname, "r")
     else
@@ -769,6 +820,9 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         end
     end
     close(file)
+    if verbose
+        println(string("Total number of entries: ", length(entries)))
+    end
     # Choose field where priority order starts with AF with the highest priority followed by AD, and finally GT
     if field == "any"
         idx = findall(.!isnothing.(match.(r"ID=AF", format_lines)))
@@ -790,6 +844,9 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         end
     end
     # Define the field and the maximum number of alleles per locus
+    if verbose
+        println("Identifying data field...")
+    end
     format_details = split(format_lines[idx[1]], ",")
     field = split(format_details[.!isnothing.(match.(r"ID=", format_details))][1], "=")[end]
     n_alleles = 0
@@ -817,10 +874,19 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
             end
         end
         close(file)
+        if verbose
+            println("Field identified: \"GT\"")
+            println(string("Ploidy: ", ploidy))
+        end
     else
         # Easy n_alleles extraction for "AF" and "AD" fields
         n_alleles = try
-            parse(Int64, split(format_details[.!isnothing.(match.(r"Number=", format_details))][1], "=")[end])
+            number = split(format_details[.!isnothing.(match.(r"Number=", format_details))][1], "=")[end]
+            if number == "R"
+                2
+            else
+                parse(Int64, number)
+            end
         catch
             throw(
                 ErrorException(
@@ -832,8 +898,15 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
                 ),
             )
         end
+        if verbose
+            println("Field identified: " * field)
+            println(string("Number of alleles per locus: ", n_alleles))
+        end
     end
     # Define the expected dimensions of the Genomes struct
+    if verbose
+        println("Initialising the output Genomes struct...")
+    end
     n = length(entries)
     p = n_lines * (n_alleles - 1)
     # Instatiate the output struct
@@ -841,6 +914,10 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     genomes.entries = entries
     genomes.populations .= "unknown"
     genomes.mask .= true
+    if verbose
+        println(string("Number of entries: ", n))
+        println(string("Number of loci-alleles: ", p))
+    end
     # Check for duplicate entries
     unique_entries::Vector{String} = unique(genomes.entries)
     duplicated_entries::Vector{String} = []
@@ -857,23 +934,33 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         )
     end
     # Read the file line by line
-    line_counter = 0
-    i::Int64 = 0
-    line::Vector{String} = repeat([""], n + 9)
-    file = if gzip
-        GZip.open(fname, "r")
-    else
-        open(fname, "r")
-    end
-    allele_frequencies::Vector{Union{Missing,Float64}} = fill(missing, n)
     if verbose
         pb = ProgressMeter.Progress(p; desc = "Loading genotypes from vcf file: ")
     end
-    for raw_line in eachline(file)
-        # raw_line = readline(file)
-        line_counter += 1
-        # Skip commented out lines including the first 2 header
-        if raw_line[1] != '#'
+    thread_lock::ReentrantLock = ReentrantLock()
+    Threads.@threads for idx in eachindex(file_pos_per_thread_ini)
+    # for idx in eachindex(file_pos_per_thread_ini)
+        # idx = 1
+        println(string("idx = ", idx))
+        allele_frequencies::Vector{Union{Missing,Float64}} = fill(missing, n)
+        ini = file_pos_per_thread_ini[idx]
+        fin = file_pos_per_thread_fin[idx]
+        line::Vector{String} = repeat([""], n + 9)
+        file = if gzip
+            GZip.open(fname, "r")
+        else
+            open(fname, "r")
+        end
+        seek(file, ini)
+        i = idx_loci_per_thread_ini[idx]
+        line_counter = (i + (line_counter - n_lines)) - 1
+        while position(file) < fin
+            raw_line = readline(file)
+            line_counter += 1
+            # Skip commented out lines including the first 2 header
+            if raw_line[1] == '#'
+                continue
+            end
             if (length(entries) + 9) != length(line)
                 throw(
                     ErrorException(
@@ -921,7 +1008,11 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
             end
             ref = line[4]
             alt = split(line[5], ",")
-            refalts = vcat([ref], alt)
+            refalts = if alt != ["."]
+                vcat([ref], alt)
+            else
+                [ref]
+            end
             if field == "AF"
                 afreqs = try
                     parse.(Float64, stack([split(split(x, ":")[idx_field[1]], ",") for x in line[IDX:end]], dims = 1))
@@ -975,12 +1066,16 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
             for j in eachindex(refalts)
                 # j = 2
                 # Skip the reference allele
-                if j == 1
+                if (j == 1) && (length(refalts) > 1)
                     continue
                 end
                 allele = refalts[j]
                 i += 1
-                genomes.loci_alleles[i] = join([chrom, pos, join(refalts, "|"), allele], "\t")
+                @lock thread_lock genomes.loci_alleles[i] = if length(refalts) > 1
+                    join([chrom, pos, join(refalts, "|"), allele], "\t")
+                else
+                    join([chrom, pos, join(repeat(refalts, 2), "|"), allele], "\t")
+                end
                 if field == "AF"
                     # Extract from AF (allele frequencies) field
                     allele_frequencies = afreqs[:, j]
@@ -1002,18 +1097,29 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
                     allele_frequencies[idx_missing] .= missing
                 end
                 # Insert allele frequencies
-                genomes.allele_frequencies[:, i] = allele_frequencies
+                @lock thread_lock genomes.allele_frequencies[:, i] = allele_frequencies
                 if verbose
                     ProgressMeter.next!(pb)
                 end
             end
         end
+        close(file)
     end
     if verbose
         ProgressMeter.finish!(pb)
     end
-    close(file)
+    # Remove missing loci-alleles
+    idx = findall(genomes.loci_alleles .!= "")
+    if verbose && (length(idx) < length(genomes.loci_alleles))
+        println(string("Removing ", length(idx), " empty loci-alleles..."))
+    end
+    genomes.loci_alleles = genomes.loci_alleles[idx]
+    genomes.allele_frequencies = genomes.allele_frequencies[:, idx]
+    genomes.mask = genomes.mask[:, idx]
     # Checks
+    if verbose
+        println("Output checks...")
+    end
     unique_loci_alleles::Vector{String} = unique(genomes.loci_alleles)
     duplicated_loci_alleles::Vector{String} = []
     for locus_allele in unique_loci_alleles

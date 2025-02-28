@@ -219,7 +219,6 @@ function writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missi
         write(file, join(header, sep))
         # Rest of the data
         for i in eachindex(phenomes.entries)
-
             line::Vector{String} = [phenomes.entries[i], phenomes.populations[i]]
             append!(line, [ismissing(x) ? "NA" : string(x) for x in phenomes.phenotypes[i, :]])
             line[end] *= "\n"
