@@ -1,47 +1,4 @@
 """
-    readjld2(type::Type; fname::String)::Type
-
-Load a core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects`), and model (`TEBV`) struct from a JLD2 file.
-
-## Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
-
-julia> fname = writejld2(genomes);
-
-julia> readjld2(Genomes, fname=fname) == genomes
-true
-
-julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"];
-
-julia> fname = writejld2(phenomes);
-
-julia> readjld2(Phenomes, fname=fname) == phenomes
-true
-
-julia> trials, _ = simulatetrials(genomes=genomes, verbose=false);
-
-julia> fname = writejld2(trials);
-
-julia> readjld2(Trials, fname=fname) == trials
-true
-```
-"""
-function readjld2(type::Type{T}; fname::String)::T where {T<:AbstractGB}
-    if !isfile(fname)
-        throw(ArgumentError("JLD2 file: " * fname * " does not exist."))
-    end
-    d = load(fname)
-    struct_name::String = collect(keys(d))[1]
-    x = d[struct_name]
-    if !checkdims(x)
-        throw(DimensionMismatch(struct_name * " struct from the JLD2 file: " * fname * " is corrupted."))
-    end
-    return x
-end
-
-
-"""
     readdelimited(type::Type{Genomes}; fname::String, sep::String = "\\t")::Genomes
 
 Load a `Genomes` struct from a string-delimited (default=`\\t`) file. 
@@ -276,6 +233,81 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
     genomes
 end
 
+"""
+    writedelimited(genomes::Genomes, sep::String = "\t", fname::Union{Missing,String} = missing)::String
+
+Save `Genomes` struct as a string-delimited (default=`\t`) file.
+Each row corresponds to a locus-allele combination.
+The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by `|`), and the specific allele.
+The subsequency columns refer to the samples, pools, entries or genotypes.
+
+## Notes:
+- Extension name should be '.tsv', '.csv', or '.txt'.
+- Header lines and comments are prefixed by '#'.
+- There are 2 header lines prefixed by '#', e.g.:
+    + header line 1: "chrom,pos,all_alleles,allele,entry_1,entry_2"
+    + header line 2: "chrom,pos,all_alleles,allele,population_1,population_1"
+
+## Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
+
+julia> writedelimited(genomes, fname="test_genomes.tsv")
+"test_genomes.tsv"
+```
+"""
+function writedelimited(genomes::Genomes; fname::Union{Missing,String} = missing, sep::String = "\t")::String
+    # genomes = Genomes(n=2,p=4); genomes.entries = ["entry_1", "entry_2"]; genomes.loci_alleles = ["locus_1", "locus_2", "locus_3", "locus_4"]; sep::String = "\t"; fname = missing;
+    # Check input arguments
+    if !checkdims(genomes)
+        throw(DimensionMismatch("Genomes input is corrupted."))
+    end
+    if ismissing(fname)
+        if sep == "\t"
+            fname = string("output-Genomes-", Dates.format(now(), "yyyymmddHHMMSS"), ".tsv")
+        elseif (sep == ",") || (sep == ";")
+            fname = string("output-Genomes-", Dates.format(now(), "yyyymmddHHMMSS"), ".csv")
+        else
+            fname = string("output-Genomes-", Dates.format(now(), "yyyymmddHHMMSS"), ".txt")
+        end
+    else
+        if isfile(fname)
+            throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+        end
+        if (split(basename(fname), ".")[end] != "tsv") &&
+           (split(basename(fname), ".")[end] != "csv") &&
+           (split(basename(fname), ".")[end] != "txt")
+            throw(ArgumentError("The extension name should be either `tsv`, `csv` or `txt`."))
+        end
+        if dirname(fname) != ""
+            if !isdir(dirname(fname))
+                throw(ArgumentError("Directory " * dirname(fname) * " does not exist."))
+            end
+        end
+    end
+    # Write into a new text file
+    open(fname, "w") do file
+        # Header lines
+        header_1::Vector{String} = ["#chrom", "pos", "all_alleles", "allele"]
+        header_2::Vector{String} = ["#chrom", "pos", "all_alleles", "allele"]
+        append!(header_1, genomes.entries)
+        append!(header_2, genomes.populations)
+        header_1[end] *= "\n"
+        header_2[end] *= "\n"
+        write(file, join(header_1, sep))
+        write(file, join(header_2, sep))
+        # Rest of the data
+        for i = 1:length(genomes.loci_alleles)
+            line::Vector{String} = [string(x) for x in split(genomes.loci_alleles[i], "\t")]
+            append!(line, [ismissing(x) ? "NA" : string(x) for x in genomes.allele_frequencies[:, i]])
+            line[end] *= "\n"
+            write(file, join(line, sep))
+        end
+    end
+    return fname
+end
+
+
 
 """
     readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\\t")::Phenomes
@@ -463,6 +495,76 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
     # Output
     phenomes
 end
+
+"""
+    writedelimited(phenomes::Phenomes, sep::String = "\t", fname::Union{Missing,String} = missing)::String
+
+Save `Phenomes` struct as a string-delimited (default=`\t`) file. 
+Each row corresponds to a samples, pools, entries or genotypes.
+The first 2 columns correspond to the entry and population names.
+The subsequency columns refer to the traits containing the phenotype values of each entry.
+Note that the extension name should be '.tsv', '.csv', or '.txt'.
+
+## Notes:
+- Extension name should be '.tsv', '.csv', or '.txt'.
+- Header line and comments are prefixed by '#'.
+- There is 1 header line prefixed by '#', e.g.: "entry,population,trait_1,trait_2,trait_3"
+
+## Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"];
+
+julia> writedelimited(phenomes, fname="test_phenomes.tsv")
+"test_phenomes.tsv"
+```
+"""
+function writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missing, sep::String = "\t")::String
+    # phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing;
+    # Check input arguments
+    if !checkdims(phenomes)
+        throw(DimensionMismatch("Phenomes input is corrupted."))
+    end
+    if ismissing(fname)
+        if sep == "\t"
+            fname = string("output-Phenomes-", Dates.format(now(), "yyyymmddHHMMSS"), ".tsv")
+        elseif (sep == ",") || (sep == ";")
+            fname = string("output-Phenomes-", Dates.format(now(), "yyyymmddHHMMSS"), ".csv")
+        else
+            fname = string("output-Phenomes-", Dates.format(now(), "yyyymmddHHMMSS"), ".txt")
+        end
+    else
+        if isfile(fname)
+            throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+        end
+        if (split(basename(fname), ".")[end] != "tsv") &&
+           (split(basename(fname), ".")[end] != "csv") &&
+           (split(basename(fname), ".")[end] != "txt")
+            throw(ArgumentError("The extension name should be either `tsv`, `csv` or `txt`."))
+        end
+        if dirname(fname) != ""
+            if !isdir(dirname(fname))
+                throw(ArgumentError("Directory " * dirname(fname) * " does not exist."))
+            end
+        end
+    end
+    # Write into a new text file
+    open(fname, "w") do file
+        # Header line
+        header::Vector{String} = ["#entries", "populations"]
+        append!(header, phenomes.traits)
+        header[end] *= "\n"
+        write(file, join(header, sep))
+        # Rest of the data
+        for i in eachindex(phenomes.entries)
+            line::Vector{String} = [phenomes.entries[i], phenomes.populations[i]]
+            append!(line, [ismissing(x) ? "NA" : string(x) for x in phenomes.phenotypes[i, :]])
+            line[end] *= "\n"
+            write(file, join(line, sep))
+        end
+    end
+    return fname
+end
+
 
 """
     readdelimited(type::Type{Trials}; fname::String, sep::String = "\\t")::Trials
@@ -656,492 +758,103 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
 end
 
 """
-    readvcf(;fname::String, field::String = "any", verbose::Bool = false)::Genomes
+    writedelimited(trials::Trials, sep::String = "\t", fname::Union{Missing,String} = missing)::String
 
-Load Genomes struct from vcf file
+Save `Trials` struct as a string-delimited (default=`\t`) file. 
+Each row corresponds to a samples, pools, entries or genotypes.
+The first 10 columns correspond to:
 
-# Examples
+1. years
+2. seasons
+3. harvests
+4. sites
+5. entries
+6. populations
+7. replications
+8. blocks
+9. rows
+10. cols 
+
+The subsequency columns refer to the traits containing the phenotype values.
+
+## Notes:
+- Extension name should be '.tsv', '.csv', or '.txt'.
+- Header line and comments are prefixed by '#'.
+- There is 1 header line prefixed by '#', e.g.: "years,seasons,harvests, ..., trait_1,tratit_2,trait_3"
+
+## Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+julia> trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.harvests = ["harvest_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"];
 
-julia> fname = writevcf(genomes);
-
-julia> fname_gz = writevcf(genomes, gzip=true);
-
-julia> genomes_reloaded = readvcf(fname=fname);
-
-julia> genomes_reloaded_gz = readvcf(fname=fname_gz);
-
-julia> genomes.entries == genomes_reloaded.entries == genomes_reloaded_gz.entries
-true
-
-julia> dimensions(genomes) == dimensions(genomes_reloaded) == dimensions(genomes_reloaded_gz)
-true
-
-julia> ismissing.(genomes.allele_frequencies) == ismissing.(genomes_reloaded.allele_frequencies) == ismissing.(genomes_reloaded_gz.allele_frequencies)
-true
+julia> writedelimited(trials, fname="test_trials.tsv")
+"test_trials.tsv"
 ```
 """
-function GBIO.readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
-    # genomes = GBCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
-    # genomes = simulategenomes(n_alleles=3, sparsity=0.1); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
+function writedelimited(trials::Trials; fname::Union{Missing,String} = missing, sep::String = "\t")::String
+    # trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.harvests = ["harvest_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing;
     # Check input arguments
-    if !isfile(fname)
-        throw(ErrorException("The file: " * fname * " does not exist."))
+    if !checkdims(trials)
+        throw(DimensionMismatch("Trials input is corrupted."))
     end
-    gzip = if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
-        true
-    else
-        false
-    end
-    # Count the number of lines in the file which are not header lines or comments
-    if verbose
-        println("Counting loci...")
-    end
-    n_lines::Int64 = 0
-    line_counter::Int64 = 0
-    file = if gzip
-        GZip.open(fname, "r")
-    else
-        open(fname, "r")
-    end
-    for raw_line in eachline(file)
-        # raw_line = readline(file)
-        line_counter += 1
-        if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
-            n_lines += 1
-        end
-    end
-    close(file)
-    if verbose
-        println(string("Total number of lines: ", line_counter))
-        println(string("Total number of loci: ", n_lines))
-    end
-    # Find location of each file chunk for multi-threaded parsing
-    if verbose
-        println("Counting threads and identifying the file positions and loci indexes per thread...")
-    end
-    n_threads = Threads.nthreads()
-    n_lines_per_thread = Int(round(n_lines / n_threads))
-    idx_loci_per_thread_ini = vcat([0], cumsum(repeat([n_lines_per_thread], n_threads-1)))
-    idx_loci_per_thread_fin = idx_loci_per_thread_ini .+ (n_lines_per_thread - 1)
-    idx_loci_per_thread_fin[end] = n_lines
-    file_pos_per_thread_ini = []
-    file_pos_per_thread_fin = []
-    file = if gzip
-        GZip.open(fname, "r")
-    else
-        open(fname, "r")
-    end
-    counter::Int64 = 0
-    previous_pos = position(file)
-    for raw_line in eachline(file)
-        # raw_line = readline(file)
-        if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
-            counter += 1
-            if counter == 1
-                append!(file_pos_per_thread_ini, previous_pos)
-            end
-            if counter == n_lines_per_thread
-                append!(file_pos_per_thread_fin, position(file))
-                counter = 0
-            end
-        end
-        previous_pos = position(file)
-    end
-    if length(file_pos_per_thread_fin) == (n_threads - 1)
-        seekend(file)
-        append!(file_pos_per_thread_fin, position(file))
-    end
-    close(file)
-    if verbose
-        println(string("Total number of threads: ", n_threads))
-    end
-    # Capture the header containing the names of the entries
-    if verbose
-        println("Extracting the names of the entries...")
-    end
-    file = if gzip
-        GZip.open(fname, "r")
-    else
-        open(fname, "r")
-    end
-    header_line = ""
-    for raw_line in eachline(file)
-        if !isnothing(match(r"^#CHR", raw_line))
-            header_line = raw_line
-            break
-        end
-    end
-    close(file)
-    header::Vector{String} = split(header_line, "\t")
-    # Column index of the start of genotype data
-    IDX::Int64 = 10
-    # Expected header/column names
-    expected_colnames = ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT"]
-    if length(header) < IDX
-        throw(
-            ArgumentError(
-                "The vcf file `" *
-                fname *
-                "` have less than " *
-                string(IDX) *
-                " columns. We expect in order the following column names: \n\t• " *
-                join(expected_colnames, "\n\t• "),
-            ),
-        )
-    end
-    idx_mismatch = findall(.!isfuzzymatch.(expected_colnames, header[1:(IDX-1)]))
-    if length(idx_mismatch) > 0
-        throw(
-            ArgumentError(
-                "The vcf file `" *
-                fname *
-                "` have the following expected column name mismatches: \n\t• " *
-                join(string.(expected_colnames[idx_mismatch], " <=> ", header[1:(IDX-1)][idx_mismatch]), "\n\t• "),
-            ),
-        )
-    end
-    # Extract the names of the entries or samples
-    entries = header[IDX:end]
-    # Capture the header lines containing the format fields
-    file = if gzip
-        GZip.open(fname, "r")
-    else
-        open(fname, "r")
-    end
-    format_lines::Vector{String} = []
-    for raw_line in eachline(file)
-        if !isnothing(match(r"^##FORMAT", raw_line))
-            push!(format_lines, raw_line)
-        end
-        if isnothing(match(r"^#", raw_line))
-            break
-        end
-    end
-    close(file)
-    if verbose
-        println(string("Total number of entries: ", length(entries)))
-    end
-    # Choose field where priority order starts with AF with the highest priority followed by AD, and finally GT
-    if field == "any"
-        idx = findall(.!isnothing.(match.(r"ID=AF", format_lines)))
-        if length(idx) == 0
-            idx = findall(.!isnothing.(match.(r"ID=AD", format_lines)))
-        end
-        if length(idx) == 0
-            idx = findall(.!isnothing.(match.(r"ID=GT", format_lines)))
-        end
-        if length(idx) == 0
-            throw(
-                ArgumentError("The input vcf file: `" * fname * "` does not have `AF`, `AD`, or `GT` genotype fields."),
-            )
-        end
-    else
-        idx = findall(.!isnothing.(match.(Regex(field), format_lines)))
-        if length(idx) == 0
-            throw(ArgumentError("The input vcf file: `" * fname * "` does not have `" * field * "` field."))
-        end
-    end
-    # Define the field and the maximum number of alleles per locus
-    if verbose
-        println("Identifying data field...")
-    end
-    format_details = split(format_lines[idx[1]], ",")
-    field = split(format_details[.!isnothing.(match.(r"ID=", format_details))][1], "=")[end]
-    n_alleles = 0
-    ploidy = 0 # only for "GT" field - not used for "AD" and "AF" fields
-    if field == "GT"
-        # Computationally expensive allele counting for field=="GT":
-        file = if gzip
-            GZip.open(fname, "r")
+    if ismissing(fname)
+        if sep == "\t"
+            fname = string("output-Trials-", Dates.format(now(), "yyyymmddHHMMSS"), ".tsv")
+        elseif (sep == ",") || (sep == ";")
+            fname = string("output-Trials-", Dates.format(now(), "yyyymmddHHMMSS"), ".csv")
         else
-            open(fname, "r")
-        end
-        for raw_line in eachline(file)
-            line = split(raw_line, "\t")
-            if line[1][1] == '#'
-                continue
-            end
-            idx_field = findall(split(line[9], ":") .== field)
-            ψ = length(vcat(split.(split(split(line[IDX], ":")[idx_field[1]], "/"), "|")...))
-            a = length(split(line[5], ",")) + 1
-            if n_alleles < a
-                n_alleles = a
-            end
-            if ploidy < ψ
-                ploidy = ψ
-            end
-        end
-        close(file)
-        if verbose
-            println("Field identified: \"GT\"")
-            println(string("Ploidy: ", ploidy))
+            fname = string("output-Trials-", Dates.format(now(), "yyyymmddHHMMSS"), ".txt")
         end
     else
-        # Easy n_alleles extraction for "AF" and "AD" fields
-        n_alleles = try
-            number = split(format_details[.!isnothing.(match.(r"Number=", format_details))][1], "=")[end]
-            if number == "R"
-                2
-            else
-                parse(Int64, number)
-            end
-        catch
-            throw(
-                ErrorException(
-                    "Error parsing the number of alleles in the `" *
-                    field *
-                    "` header line of the vcf file: `" *
-                    fname *
-                    "`",
-                ),
-            )
+        if isfile(fname)
+            throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
         end
-        if verbose
-            println("Field identified: " * field)
-            println(string("Number of alleles per locus: ", n_alleles))
+        if (split(basename(fname), ".")[end] != "tsv") &&
+           (split(basename(fname), ".")[end] != "csv") &&
+           (split(basename(fname), ".")[end] != "txt")
+            throw(ArgumentError("The extension name should be either `tsv`, `csv` or `txt`."))
+        end
+        if dirname(fname) != ""
+            if !isdir(dirname(fname))
+                throw(ArgumentError("Directory " * dirname(fname) * " does not exist."))
+            end
         end
     end
-    # Define the expected dimensions of the Genomes struct
-    if verbose
-        println("Initialising the output Genomes struct...")
-    end
-    n = length(entries)
-    p = n_lines * (n_alleles - 1)
-    # Instatiate the output struct
-    genomes = Genomes(n = n, p = p)
-    genomes.entries = entries
-    genomes.populations .= "unknown"
-    genomes.mask .= true
-    if verbose
-        println(string("Number of entries: ", n))
-        println(string("Number of loci-alleles: ", p))
-    end
-    # Check for duplicate entries
-    unique_entries::Vector{String} = unique(genomes.entries)
-    duplicated_entries::Vector{String} = []
-    for entry in unique_entries
-        if sum(genomes.entries .== entry) > 1
-            push!(duplicated_entries, entry)
+    # Write into a new text file
+    open(fname, "w") do file
+        # Header line
+        header::Vector{String} = [
+            "#years",
+            "seasons",
+            "harvests",
+            "sites",
+            "entries",
+            "populations",
+            "replications",
+            "blocks",
+            "rows",
+            "cols",
+        ]
+        append!(header, trials.traits)
+        header[end] *= "\n"
+        write(file, join(header, sep))
+        # Rest of the data
+        for i in eachindex(trials.entries)
+            line::Vector{String} = [
+                trials.years[i],
+                trials.seasons[i],
+                trials.harvests[i],
+                trials.sites[i],
+                trials.entries[i],
+                trials.populations[i],
+                trials.replications[i],
+                trials.blocks[i],
+                trials.rows[i],
+                trials.cols[i],
+            ]
+            append!(line, [ismissing(x) ? "NA" : string(x) for x in trials.phenotypes[i, :]])
+            line[end] *= "\n"
+            write(file, join(line, sep))
         end
     end
-    if length(genomes.entries) > length(unique_entries)
-        throw(
-            ErrorException(
-                string("Duplicate entries in vcf file: '", fname, "' i.e.:\n\t‣ ", join(duplicated_entries, "\n\t‣ ")),
-            ),
-        )
-    end
-    # Read the file line by line
-    if verbose
-        pb = ProgressMeter.Progress(p; desc = "Loading genotypes from vcf file: ")
-    end
-    thread_lock::ReentrantLock = ReentrantLock()
-    Threads.@threads for idx in eachindex(file_pos_per_thread_ini)
-    # for idx in eachindex(file_pos_per_thread_ini)
-        # idx = 1
-        println(string("idx = ", idx))
-        allele_frequencies::Vector{Union{Missing,Float64}} = fill(missing, n)
-        ini = file_pos_per_thread_ini[idx]
-        fin = file_pos_per_thread_fin[idx]
-        line::Vector{String} = repeat([""], n + 9)
-        file = if gzip
-            GZip.open(fname, "r")
-        else
-            open(fname, "r")
-        end
-        seek(file, ini)
-        i = idx_loci_per_thread_ini[idx]
-        line_counter = (i + (line_counter - n_lines)) - 1
-        while position(file) < fin
-            raw_line = readline(file)
-            line_counter += 1
-            # Skip commented out lines including the first 2 header
-            if raw_line[1] == '#'
-                continue
-            end
-            if (length(entries) + 9) != length(line)
-                throw(
-                    ErrorException(
-                        "The header line and line: " *
-                        string(line_counter) *
-                        " of the vcf file: '" *
-                        fname *
-                        "' do have the same number of columns.",
-                    ),
-                )
-            end
-            line .= split(raw_line, "\t")
-            # Find the field from which we will extract the allele frequencies from
-            idx_field = findall(split(line[9], ":") .== field)
-            # Skip the line if the field is absent
-            if length(idx_field) == 0
-                continue
-                if verbose
-                    println(
-                        "Field `" *
-                        field *
-                        "` absent in line " *
-                        string(line_counter) *
-                        " of vcf file: `" *
-                        fname *
-                        "`.",
-                    )
-                end
-            end
-            chrom = line[1]
-            pos = try
-                parse(Int64, line[2])
-            catch
-                throw(
-                    ErrorException(
-                        "Cannot parse the second column, i.e. position field at line: " *
-                        string(line_counter) *
-                        " ('" *
-                        line[2] *
-                        "') of the vcf file: '" *
-                        fname *
-                        "'.",
-                    ),
-                )
-            end
-            ref = line[4]
-            alt = split(line[5], ",")
-            refalts = if alt != ["."]
-                vcat([ref], alt)
-            else
-                [ref]
-            end
-            if field == "AF"
-                afreqs = try
-                    parse.(Float64, stack([split(split(x, ":")[idx_field[1]], ",") for x in line[IDX:end]], dims = 1))
-                catch
-                    throw(
-                        ErrorException(
-                            "Cannot parse the `" *
-                            field *
-                            "` field (index=" *
-                            string(idx_field[1]) *
-                            ") at line " *
-                            string(line_counter) *
-                            " of the vcf file: `" *
-                            fname *
-                            "`.",
-                        ),
-                    )
-                end
-                idx_missing = findall(sum(afreqs, dims = 2)[:, 1] .== 0.0)
-            elseif field == "AD"
-                depths = try
-                    parse.(Float64, stack([split(split(x, ":")[idx_field[1]], ",") for x in line[IDX:end]], dims = 1))
-                catch
-                    throw(
-                        ErrorException(
-                            "Cannot parse the `" *
-                            field *
-                            "` field (index=" *
-                            string(idx_field[1]) *
-                            ") at line " *
-                            string(line_counter) *
-                            " of the vcf file: `" *
-                            fname *
-                            "`.",
-                        ),
-                    )
-                end
-                idx_missing = findall(sum(depths, dims = 2)[:, 1] .== 0.0)
-            elseif field == "GT"
-                genotype_calls = fill(0, length(line) - 9, ploidy)
-                genotype_calls_tmp::Vector{String} = repeat([""], ploidy)
-                for (k, x) in enumerate(line[IDX:end])
-                    # k, x = 1, line[IDX]
-                    genotype_calls_tmp = vcat(split.(split(split(x, ":")[idx_field[1]], "/"), "|")...)
-                    # Convert missing GT (i.e. '.') into zeroes
-                    replace!(genotype_calls_tmp, "." => "0")
-                    genotype_calls[k, :] = parse.(Int64, genotype_calls_tmp)
-                end
-                idx_missing = findall(sum(genotype_calls, dims = 2)[:, 1] .== 0.0)
-            end
-            for j in eachindex(refalts)
-                # j = 2
-                # Skip the reference allele
-                if (j == 1) && (length(refalts) > 1)
-                    continue
-                end
-                allele = refalts[j]
-                i += 1
-                @lock thread_lock genomes.loci_alleles[i] = if length(refalts) > 1
-                    join([chrom, pos, join(refalts, "|"), allele], "\t")
-                else
-                    join([chrom, pos, join(repeat(refalts, 2), "|"), allele], "\t")
-                end
-                if field == "AF"
-                    # Extract from AF (allele frequencies) field
-                    allele_frequencies = afreqs[:, j]
-                elseif field == "AD"
-                    # Extract from AD (allele depths) field
-                    allele_frequencies = depths[:, j] ./ sum(depths, dims = 2)[:, 1]
-                elseif field == "GT"
-                    # Extract from GT (genotypes) field
-                    allele_frequencies = sum(genotype_calls .== j, dims = 2)[:, 1] / ploidy
-                else
-                    throw(
-                        ArgumentError(
-                            "Unrecognized genotyped field: `" * field * "`. Please select `AF`, `AD` or `GT`.",
-                        ),
-                    )
-                end
-                # Set missing allele frequencies
-                if length(idx_missing) > 0
-                    allele_frequencies[idx_missing] .= missing
-                end
-                # Insert allele frequencies
-                @lock thread_lock genomes.allele_frequencies[:, i] = allele_frequencies
-                if verbose
-                    ProgressMeter.next!(pb)
-                end
-            end
-        end
-        close(file)
-    end
-    if verbose
-        ProgressMeter.finish!(pb)
-    end
-    # Remove missing loci-alleles
-    idx = findall(genomes.loci_alleles .!= "")
-    if verbose && (length(idx) < length(genomes.loci_alleles))
-        println(string("Removing ", length(idx), " empty loci-alleles..."))
-    end
-    genomes.loci_alleles = genomes.loci_alleles[idx]
-    genomes.allele_frequencies = genomes.allele_frequencies[:, idx]
-    genomes.mask = genomes.mask[:, idx]
-    # Checks
-    if verbose
-        println("Output checks...")
-    end
-    unique_loci_alleles::Vector{String} = unique(genomes.loci_alleles)
-    duplicated_loci_alleles::Vector{String} = []
-    for locus_allele in unique_loci_alleles
-        if sum(genomes.loci_alleles .== locus_allele) > 1
-            push!(duplicated_loci_alleles, locus_allele)
-        end
-    end
-    if length(duplicated_loci_alleles) > 0
-        throw(
-            ErrorException(
-                string(
-                    "Duplicate loci-allele combinations in file: '",
-                    fname,
-                    "' at:\n\t‣ ",
-                    join(duplicated_loci_alleles, "\n\t‣ "),
-                ),
-            ),
-        )
-    end
-    if !checkdims(genomes)
-        throw(ErrorException("Error loading Genomes struct from the file: '" * fname * "'"))
-    end
-    # Output
-    genomes
+    return fname
 end
