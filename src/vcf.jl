@@ -517,6 +517,10 @@ function GBIO.readvcf(; fname::String, field::String = "any", verbose::Bool = fa
         while (position(file) <= fin) && !eof(file)
             raw_line = readline(file)
             line_counter += 1
+            # If we somehow end the end of the file
+            if (length(raw_line) == 0) && (position(file) == fin)
+                break
+            end
             # Skip commented out lines including the first 2 header
             if raw_line[1] == '#'
                 continue
