@@ -2,8 +2,8 @@ function vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
     if verbose
         println("Counting loci...")
     end
-    n_lines::Int64 = 0
-    line_counter::Int64 = 0
+    n_loci::Int64 = 0
+    total_lines::Int64 = 0
     file = if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
         GZip.open(fname, "r")
     else
@@ -11,33 +11,33 @@ function vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
     end
     for raw_line in eachline(file)
         # raw_line = readline(file)
-        line_counter += 1
-        if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
-            n_lines += 1
+        total_lines += 1
+        if (raw_line[1] != '#') && (total_lines > 1) && (length(raw_line) > 0)
+            n_loci += 1
         end
     end
     close(file)
     if verbose
-        println(string("Total number of lines: ", line_counter))
-        println(string("Total number of loci: ", n_lines))
+        println(string("Total number of lines: ", total_lines))
+        println(string("Total number of loci: ", n_loci))
     end
-    line_counter, n_lines
+    total_lines, n_loci
 end
 
 function vcf_chunkify(
     fname::String,
     verbose::Bool,
-    n_lines::Int64,
+    n_loci::Int64,
     line_counter::Int64,
 )::Tuple{Vector{Int64},Vector{Int64},Vector{Int64},Vector{Int64}}
     if verbose
         println("Counting threads and identifying the file positions and loci indexes per thread...")
     end
     n_threads = Threads.nthreads()
-    n_lines_per_thread = Int(round(n_lines / n_threads))
+    n_lines_per_thread = Int(round(n_loci / n_threads))
     idx_loci_per_thread_ini = vcat([0], cumsum(repeat([n_lines_per_thread], n_threads - 1)))
     idx_loci_per_thread_fin = idx_loci_per_thread_ini .+ (n_lines_per_thread - 1)
-    idx_loci_per_thread_fin[end] = n_lines
+    idx_loci_per_thread_fin[end] = n_loci
     file_pos_per_thread_ini = []
     file_pos_per_thread_fin = []
     file = if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
@@ -62,7 +62,9 @@ function vcf_chunkify(
         previous_pos = position(file)
     end
     if length(file_pos_per_thread_fin) == (n_threads - 1)
-        seekend(file)
+        while !eof(file)
+            readline(file)
+        end
         append!(file_pos_per_thread_fin, position(file))
     end
     # file_pos_per_thread_fin[end] = position(file)
@@ -238,7 +240,7 @@ function vcf_instantiate_output(
     fname::String,
     verbose::Bool,
     entries::Vector{String},
-    n_lines::Int64,
+    n_loci::Int64,
     n_alleles::Int64,
 )::Genomes
     # Define the expected dimensions of the Genomes struct
@@ -246,7 +248,7 @@ function vcf_instantiate_output(
         println("Initialising the output Genomes struct...")
     end
     n = length(entries)
-    p = n_lines * (n_alleles - 1)
+    p = n_loci * (n_alleles - 1)
     # Instatiate the output struct
     genomes = Genomes(n = n, p = p)
     genomes.entries = entries
@@ -459,7 +461,7 @@ julia> ismissing.(genomes.allele_frequencies) == ismissing.(genomes_reloaded.all
 true
 ```
 """
-function readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
+function GBIO.readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
     # genomes = GBCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
     # genomes = simulategenomes(n_alleles=3, sparsity=0.1); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
     # Check input arguments
@@ -472,17 +474,16 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         false
     end
     # Count the number of lines in the file which are not header lines or comments
-    line_counter, n_lines = vcf_count_loci(fname, verbose)
+    total_lines, n_loci = vcf_count_loci(fname, verbose)
     # Find location of each file chunk for multi-threaded parsing
     (idx_loci_per_thread_ini, idx_loci_per_thread_fin, file_pos_per_thread_ini, file_pos_per_thread_fin) =
-        vcf_chunkify(fname, verbose, n_lines, line_counter)
-    n_threads = length(idx_loci_per_thread_ini)
+        vcf_chunkify(fname, verbose, n_loci, total_lines)
     # Extract the names of the entries or samples
     entries, format_lines = vcf_extract_entries_and_formats(fname, verbose)
     # Extract info
     field, n_alleles, ploidy = vcf_extract_info(fname, verbose, field, format_lines)
     # Instantiate the output Genomes struct
-    genomes = vcf_instantiate_output(fname, verbose, entries, n_lines, n_alleles)
+    genomes = vcf_instantiate_output(fname, verbose, entries, n_loci, n_alleles)
     n, p = size(genomes.allele_frequencies)
     # Read the file line by line
     pb = if verbose
@@ -491,7 +492,7 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         nothing
     end
     files = []
-    for i = 1:n_threads
+    for i in eachindex(file_pos_per_thread_ini)
         file =
             if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
                 GZip.open(fname, "r")
@@ -501,7 +502,7 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         push!(files, file)
     end
     thread_lock::ReentrantLock = ReentrantLock()
-    Threads.@threads for idx = 1:n_threads
+    Threads.@threads for idx in eachindex(file_pos_per_thread_ini)
         # for idx in eachindex(file_pos_per_thread_ini)
         # idx = 2
         # println(string("idx = ", idx))
@@ -512,10 +513,14 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         file = files[idx]
         seek(file, ini)
         i = idx_loci_per_thread_ini[idx]
-        line_counter = (i + (line_counter - n_lines)) - 1
-        while position(file) <= fin
+        line_counter = (i + (total_lines - n_loci)) - 1
+        while (position(file) <= fin) && !eof(file)
             raw_line = readline(file)
             line_counter += 1
+            # If we somehow end the end of the file
+            if (length(raw_line) == 0) && (position(file) == fin)
+                break
+            end
             # Skip commented out lines including the first 2 header
             if raw_line[1] == '#'
                 continue
