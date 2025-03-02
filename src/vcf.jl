@@ -461,7 +461,7 @@ julia> ismissing.(genomes.allele_frequencies) == ismissing.(genomes_reloaded.all
 true
 ```
 """
-function GBIO.readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
+function readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
     # genomes = GBCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
     # genomes = simulategenomes(n_alleles=3, sparsity=0.1); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
     # Check input arguments
