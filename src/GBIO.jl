@@ -9,12 +9,14 @@ using ProgressMeter
 using PrecompileTools: @compile_workload
 
 include("fuzzy_matching.jl")
-include("reader.jl")
-include("writer.jl")
+include("jld2.jl")
+include("tsv.jl")
+include("vcf.jl")
 
 export levenshteindistance, isfuzzymatch
-export readjld2, readdelimited, readvcf
-export writejld2, writedelimited, writevcf
+export readjld2, writejld2
+export readdelimited, writedelimited
+export readvcf, writevcf
 
 # # Precompile
 # @compile_workload begin
