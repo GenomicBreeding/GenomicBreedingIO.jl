@@ -62,8 +62,12 @@ function vcf_chunkify(
         previous_pos = position(file)
     end
     if length(file_pos_per_thread_fin) == (n_threads - 1)
-        while !eof(file)
-            readline(file)
+        try
+            seekend(file)
+        catch
+            while !eof(file)
+                readline(file)
+            end
         end
         append!(file_pos_per_thread_fin, position(file))
     end
@@ -517,9 +521,11 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         while (position(file) <= fin) && !eof(file)
             raw_line = readline(file)
             line_counter += 1
-            # If we somehow end the end of the file
+            # If we somehow end the end of the file or encounter an empty line
             if (length(raw_line) == 0) && (position(file) == fin)
-                break
+                break # end of file
+            elseif (length(raw_line) == 0) && (position(file) < fin)
+                continue # empty line in the body of the file
             end
             # Skip commented out lines including the first 2 header
             if raw_line[1] == '#'
