@@ -62,7 +62,9 @@ function vcf_chunkify(
         previous_pos = position(file)
     end
     if length(file_pos_per_thread_fin) == (n_threads - 1)
-        seekend(file)
+        while !eof(file)
+            readline(file)
+        end
         append!(file_pos_per_thread_fin, position(file))
     end
     # file_pos_per_thread_fin[end] = position(file)
@@ -459,7 +461,7 @@ julia> ismissing.(genomes.allele_frequencies) == ismissing.(genomes_reloaded.all
 true
 ```
 """
-function readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
+function GBIO.readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
     # genomes = GBCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
     # genomes = simulategenomes(n_alleles=3, sparsity=0.1); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
     # Check input arguments
@@ -476,7 +478,6 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     # Find location of each file chunk for multi-threaded parsing
     (idx_loci_per_thread_ini, idx_loci_per_thread_fin, file_pos_per_thread_ini, file_pos_per_thread_fin) =
         vcf_chunkify(fname, verbose, n_loci, total_lines)
-    n_threads = length(idx_loci_per_thread_ini)
     # Extract the names of the entries or samples
     entries, format_lines = vcf_extract_entries_and_formats(fname, verbose)
     # Extract info
@@ -491,7 +492,7 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         nothing
     end
     files = []
-    for i = 1:n_threads
+    for i in eachindex(file_pos_per_thread_ini)
         file =
             if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
                 GZip.open(fname, "r")
@@ -501,10 +502,10 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         push!(files, file)
     end
     thread_lock::ReentrantLock = ReentrantLock()
-    Threads.@threads for idx = 1:n_threads
+    Threads.@threads for idx in eachindex(file_pos_per_thread_ini)
         # for idx in eachindex(file_pos_per_thread_ini)
         # idx = 2
-        println(string("idx = ", idx))
+        # println(string("idx = ", idx))
         allele_frequencies::Vector{Union{Missing,Float64}} = fill(missing, n)
         ini = file_pos_per_thread_ini[idx]
         fin = file_pos_per_thread_fin[idx]
@@ -513,7 +514,7 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
         seek(file, ini)
         i = idx_loci_per_thread_ini[idx]
         line_counter = (i + (total_lines - n_loci)) - 1
-        while position(file) <= fin
+        while (position(file) <= fin) && !eof(file)
             raw_line = readline(file)
             line_counter += 1
             # Skip commented out lines including the first 2 header
