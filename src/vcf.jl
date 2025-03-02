@@ -413,15 +413,15 @@ function vcf_extract_allele_freqs!(
         else
             join([chrom, pos, join(repeat(refalts, 2), "|"), allele], "\t")
         end
-        if field == "AF"
+        allele_frequencies::Vector{Union{Missing,Float64}} = if field == "AF"
             # Extract from AF (allele frequencies) field
-            allele_frequencies = afreqs[:, j]
+            afreqs[:, j]
         elseif field == "AD"
             # Extract from AD (allele depths) field
-            allele_frequencies = depths[:, j] ./ sum(depths, dims = 2)[:, 1]
+            depths[:, j] ./ sum(depths, dims = 2)[:, 1]
         elseif field == "GT"
             # Extract from GT (genotypes) field
-            allele_frequencies = sum(genotype_calls .== j, dims = 2)[:, 1] / ploidy
+            sum(genotype_calls .== j, dims = 2)[:, 1] / ploidy
         else
             throw(ArgumentError("Unrecognized genotyped field: `" * field * "`. Please select `AF`, `AD` or `GT`."))
         end
