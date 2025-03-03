@@ -578,9 +578,11 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     end
     unique_loci_alleles::Vector{String} = unique(genomes.loci_alleles)
     duplicated_loci_alleles::Vector{String} = []
-    for locus_allele in unique_loci_alleles
-        if sum(genomes.loci_alleles .== locus_allele) > 1
-            push!(duplicated_loci_alleles, locus_allele)
+    if length(unique_loci_alleles) < length(genomes.loci_alleles)
+        for locus_allele in unique_loci_alleles
+            if sum(genomes.loci_alleles .== locus_allele) > 1
+                push!(duplicated_loci_alleles, locus_allele)
+            end
         end
     end
     if length(duplicated_loci_alleles) > 0
