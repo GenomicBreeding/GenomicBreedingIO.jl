@@ -1,9 +1,15 @@
 """
-    readdelimited(type::Type{Genomes}; fname::String, sep::String = "\\t")::Genomes
+    readdelimited(
+        type::Type{Genomes};
+        fname::String,
+        sep::String = \"\\t\",
+        parse_populations_from_entries::Union{Nothing,Function} = nothing,
+        verbose::Bool = false,
+    )::Genomes
 
-Load a `Genomes` struct from a string-delimited (default=`\\t`) file. 
+Load a `Genomes` struct from a string-delimited (default=\"\\t\") file. 
 Each row corresponds to a locus-allele combination.
-The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by `|`), and the specific allele.
+The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by \"|\"), and the specific allele.
 The subsequency columns refer to the samples, pools, entries or genotypes.
 
 # Notes:
@@ -17,16 +23,37 @@ The subsequency columns refer to the samples, pools, entries or genotypes.
 ```jldoctest; setup = :(using GBCore, GBIO)
 julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
 
+julia> genomes.entries = [string(genomes.populations[i], "-", genomes.entries[i]) for i in eachindex(genomes.populations)];
+
 julia> fname = writedelimited(genomes);
 
 julia> genomes_reloaded = readdelimited(Genomes, fname=fname);
 
 julia> genomes == genomes_reloaded
 true
+
+julia> fname = writedelimited(genomes, include_population_header=false);
+
+julia> genomes_reloaded = readdelimited(Genomes, fname=fname);
+
+julia> unique(genomes_reloaded.populations) == ["Unknown_population"]
+true
+
+julia> genomes_reloaded = readdelimited(Genomes, fname=fname, parse_populations_from_entries=x -> split(x, "-")[1]);
+
+julia> genomes == genomes_reloaded
+true
 ```
 """
-function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", verbose::Bool = false)::Genomes
-    # type = Genomes; genomes = GBCore.simulategenomes(n=10, sparsity=0.01); sep = "\t"; fname = writedelimited(genomes); verbose = true
+function readdelimited(
+    type::Type{Genomes};
+    fname::String,
+    sep::String = "\t",
+    parse_populations_from_entries::Union{Nothing,Function} = nothing,
+    verbose::Bool = false,
+)::Genomes
+    # type = Genomes; genomes = GBCore.simulategenomes(n=10, sparsity=0.01); fname = writedelimited(genomes); sep = "\t"; verbose = true;
+    # parse_populations_from_entries = x -> split(x, "-")[1]
     # Check input arguments
     if !isfile(fname)
         throw(ErrorException("The file: " * fname * " does not exist."))
@@ -48,9 +75,6 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
     header_1::Vector{String} = split(readline(file), sep)
     header_2::Vector{String} = split(readline(file), sep)
     close(file)
-    if (length(header_1) != length(header_2)) || (header_1[1:4] != header_2[1:4])
-        throw(ErrorException("The 2 header lines in the genomes file: '" * fname * "' do not match."))
-    end
     # Column index of the start of numeric values
     IDX::Int64 = 5
     # Expected header/column names
@@ -78,9 +102,36 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
             ),
         )
     end
+    # If only one header exits, i.e. the header with entriy names and the population names are missing
+    with_header_2::Bool = (header_1[1:4] == header_2[1:4])
+    header_2 = if with_header_2
+        header_2
+    else
+        population_names = if isnothing(parse_populations_from_entries)
+            repeat(["Unknown_population"], length(header_1) - 4)
+        else
+            try
+                parse_populations_from_entries.(header_1[IDX:end])
+            catch
+                throw(
+                    ArgumentError(
+                        "Error parsing population names from entry names using the `parse_populations_from_entries` function.",
+                    ),
+                )
+            end
+        end
+        vcat(header_1[1:4], population_names)
+    end
+    if (length(header_1) != length(header_2))
+        throw(ErrorException("The 2 header lines in the genomes file: '" * fname * "' do not match."))
+    end
     # Define the expected dimensions of the Genomes struct
     n::Int64 = length(header_1) - (IDX - 1)
-    p::Int64 = n_lines
+    p::Int64 = if with_header_2
+        n_lines
+    else
+        n_lines + 1
+    end
     # Instatiate the output struct
     genomes = Genomes(n = n, p = p)
     genomes.entries = header_1[IDX:end]
@@ -116,8 +167,12 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
         # println(string("i=", i, "; line_counter=", line_counter))
         line .= split(raw_line, sep)
         line_counter += 1
-        # Skip commented out lines including the first 2 header and empty lines
-        if (line[1][1] != '#') && (line_counter > 2) && (length(raw_line) > 0)
+        # Skip commented out lines and empty lines, as well as the first 2 lines if we have 2 headers or just the first line if we have only 1 header
+        if (
+            (line[1][1] != '#') &&
+            (length(raw_line) > 0) &&
+            ((with_header_2 && (line_counter > 2)) || (!with_header_2 && (line_counter > 1)))
+        )
             if length(header_1) != length(line)
                 throw(
                     ErrorException(
@@ -234,11 +289,16 @@ function readdelimited(type::Type{Genomes}; fname::String, sep::String = "\t", v
 end
 
 """
-    writedelimited(genomes::Genomes, sep::String = "\t", fname::Union{Missing,String} = missing)::String
+    writedelimited(
+        genomes::Genomes;
+        fname::Union{Missing,String} = missing,
+        sep::String = \"\\t\",
+        include_population_header::Bool = true,
+    )::String
 
-Save `Genomes` struct as a string-delimited (default=`\t`) file.
+Save `Genomes` struct as a string-delimited (default=\"\\t\") file.
 Each row corresponds to a locus-allele combination.
-The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by `|`), and the specific allele.
+The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by \"|\"), and the specific allele.
 The subsequency columns refer to the samples, pools, entries or genotypes.
 
 ## Notes:
@@ -256,8 +316,13 @@ julia> writedelimited(genomes, fname="test_genomes.tsv")
 "test_genomes.tsv"
 ```
 """
-function writedelimited(genomes::Genomes; fname::Union{Missing,String} = missing, sep::String = "\t")::String
-    # genomes = Genomes(n=2,p=4); genomes.entries = ["entry_1", "entry_2"]; genomes.loci_alleles = ["locus_1", "locus_2", "locus_3", "locus_4"]; sep::String = "\t"; fname = missing;
+function writedelimited(
+    genomes::Genomes;
+    fname::Union{Missing,String} = missing,
+    sep::String = "\t",
+    include_population_header::Bool = true,
+)::String
+    # genomes = Genomes(n=2,p=4); genomes.entries = ["entry_1", "entry_2"]; genomes.loci_alleles = ["locus_1", "locus_2", "locus_3", "locus_4"]; sep::String = "\t"; fname = missing; include_population_header = true;
     # Check input arguments
     if !checkdims(genomes)
         throw(DimensionMismatch("Genomes input is corrupted."))
@@ -289,13 +354,15 @@ function writedelimited(genomes::Genomes; fname::Union{Missing,String} = missing
     open(fname, "w") do file
         # Header lines
         header_1::Vector{String} = ["#chrom", "pos", "all_alleles", "allele"]
-        header_2::Vector{String} = ["#chrom", "pos", "all_alleles", "allele"]
         append!(header_1, genomes.entries)
-        append!(header_2, genomes.populations)
         header_1[end] *= "\n"
-        header_2[end] *= "\n"
         write(file, join(header_1, sep))
-        write(file, join(header_2, sep))
+        if include_population_header
+            header_2::Vector{String} = ["#chrom", "pos", "all_alleles", "allele"]
+            append!(header_2, genomes.populations)
+            header_2[end] *= "\n"
+            write(file, join(header_2, sep))
+        end
         # Rest of the data
         for i = 1:length(genomes.loci_alleles)
             line::Vector{String} = [string(x) for x in split(genomes.loci_alleles[i], "\t")]
@@ -312,9 +379,9 @@ end
 """
     readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\\t")::Phenomes
 
-Load a `Phenomes` struct from a string-delimited (default=`\\t`) file. 
+Load a `Phenomes` struct from a string-delimited (default=\"\\t\") file. 
 Each row corresponds to a locus-allele combination.
-The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by `|`), and the specific allele.
+The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by \"|\"), and the specific allele.
 The subsequency columns refer to the samples, pools, entries or genotypes.
 
 # Examples
@@ -499,7 +566,7 @@ end
 """
     writedelimited(phenomes::Phenomes, sep::String = "\t", fname::Union{Missing,String} = missing)::String
 
-Save `Phenomes` struct as a string-delimited (default=`\t`) file. 
+Save `Phenomes` struct as a string-delimited (default=\"\\t\") file. 
 Each row corresponds to a samples, pools, entries or genotypes.
 The first 2 columns correspond to the entry and population names.
 The subsequency columns refer to the traits containing the phenotype values of each entry.
@@ -569,7 +636,7 @@ end
 """
     readdelimited(type::Type{Trials}; fname::String, sep::String = "\\t")::Trials
 
-Load a `Trials` struct from a string-delimited (default=`\\t`) file. 
+Load a `Trials` struct from a string-delimited (default=\"\\t\") file. 
 We expect the following 10 identifier columns:
     ‣ years
     ‣ seasons
@@ -760,7 +827,7 @@ end
 """
     writedelimited(trials::Trials, sep::String = "\t", fname::Union{Missing,String} = missing)::String
 
-Save `Trials` struct as a string-delimited (default=`\t`) file. 
+Save `Trials` struct as a string-delimited (default=\"\\t\") file. 
 Each row corresponds to a samples, pools, entries or genotypes.
 The first 10 columns correspond to:
 
