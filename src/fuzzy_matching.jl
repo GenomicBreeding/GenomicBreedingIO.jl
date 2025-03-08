@@ -1,8 +1,17 @@
 """
     levenshteindistance(a::String, b::String)::Int64
 
-Calculate the Levenshtein distance between 2 strings.
-TODO: optimise as we only need to compute 2 rows at a time and do not need the full matrix
+Calculate the Levenshtein distance (edit distance) between two strings.
+
+The Levenshtein distance is a measure of the minimum number of single-character edits 
+(insertions, deletions, or substitutions) required to change one string into another.
+
+# Arguments
+- `a::String`: First input string
+- `b::String`: Second input string
+
+# Returns
+- `Int64`: The minimum number of edits needed to transform string `a` into string `b`
 
 # Examples
 ```jldoctest; setup = :(using GBIO)
@@ -47,7 +56,19 @@ end
 """
     isfuzzymatch(a::String, b::String; threshold::Float64=0.3)::Bool
 
-Fuzzy string matching using the Levenshtein distance, and a threshold as a fraction of the smaller string.
+Determines if two strings approximately match each other using Levenshtein distance.
+
+The function compares two strings and returns `true` if they are considered similar enough
+based on the Levenshtein edit distance and a threshold value. The threshold is applied as
+a fraction of the length of the shorter string.
+
+# Arguments
+- `a::String`: First string to compare
+- `b::String`: Second string to compare
+- `threshold::Float64=0.3`: Maximum allowed edit distance as a fraction of the shorter string length
+
+# Returns
+- `Bool`: `true` if the strings match within the threshold, `false` otherwise
 
 # Examples
 ```jldoctest; setup = :(using GBIO)

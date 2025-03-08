@@ -2,22 +2,41 @@
     readdelimited(
         type::Type{Genomes};
         fname::String,
-        sep::String = \"\\t\",
+        sep::String = "\\t",
         parse_populations_from_entries::Union{Nothing,Function} = nothing,
-        verbose::Bool = false,
+        verbose::Bool = false
     )::Genomes
 
-Load a `Genomes` struct from a string-delimited (default=\"\\t\") file. 
-Each row corresponds to a locus-allele combination.
-The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by \"|\"), and the specific allele.
-The subsequency columns refer to the samples, pools, entries or genotypes.
+Load genotype data from a delimited text file into a `Genomes` struct.
 
-# Notes:
-- Extension name should be '.tsv', '.csv', or '.txt'.
-- Header lines and comments are prefixed by '#'.
-- There are 2 header lines prefixed by '#', e.g.:
-    + header line 1: "chrom,pos,all_alleles,allele,entry_1,entry_2"
-    + header line 2: "chrom,pos,all_alleles,allele,population_1,population_1"
+# Arguments
+- `type::Type{Genomes}`: Type parameter (always `Genomes`)
+- `fname::String`: Path to the input file
+- `sep::String`: Delimiter character (default: tab)
+- `parse_populations_from_entries::Union{Nothing,Function}`: Optional function to extract population names from entry names
+- `verbose::Bool`: Whether to show progress bar during loading
+
+# File Format
+The input file should be structured as follows:
+- Supported extensions: .tsv, .csv, or .txt
+- Comments and headers start with '#'
+- Header format (2 lines where the second line is optional):
+    1. Column names: "chrom,pos,all_alleles,allele,entry_1,entry_2,..."
+    2. Population names (optional): "chrom,pos,all_alleles,allele,pop_1,pop_2,..."
+- Data columns:
+    1. chromosome identifier
+    2. position (integer)
+    3. all alleles at locus (delimited by '|')
+    4. specific allele
+    5+. allele frequencies for each entry (0.0-1.0 or missing/NA)
+
+# Returns
+- `Genomes`: A populated Genomes struct containing the loaded data
+
+# Throws
+- `ErrorException`: If file doesn't exist or has invalid format
+- `ArgumentError`: If column names don't match expected format
+- `OverflowError`: If allele frequencies are outside [0,1] range
 
 # Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
@@ -292,23 +311,44 @@ end
     writedelimited(
         genomes::Genomes;
         fname::Union{Missing,String} = missing,
-        sep::String = \"\\t\",
-        include_population_header::Bool = true,
+        sep::String = "\\t",
+        include_population_header::Bool = true
     )::String
 
-Save `Genomes` struct as a string-delimited (default=\"\\t\") file.
-Each row corresponds to a locus-allele combination.
-The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by \"|\"), and the specific allele.
-The subsequency columns refer to the samples, pools, entries or genotypes.
+Write genomic data to a delimited text file.
 
-## Notes:
-- Extension name should be '.tsv', '.csv', or '.txt'.
-- Header lines and comments are prefixed by '#'.
-- There are 2 header lines prefixed by '#', e.g.:
-    + header line 1: "chrom,pos,all_alleles,allele,entry_1,entry_2"
-    + header line 2: "chrom,pos,all_alleles,allele,population_1,population_1"
+# Arguments
+- `genomes::Genomes`: A Genomes struct containing the genomic data to be written
+- `fname::Union{Missing,String}`: Output filename. If missing, generates an automatic filename with timestamp
+- `sep::String`: Delimiter character for the output file (default: tab)
+- `include_population_header::Bool`: Whether to include population information in the header (default: true)
 
-## Examples
+# Returns
+- `String`: Path to the created output file
+
+# File Format
+The output file contains:
+1. Header lines (prefixed with '#'):
+   - First line: chromosome, position, alleles, and entry information
+   - Second line (optional): population information
+2. Data rows with the following columns:
+   - Column 1: Chromosome identifier
+   - Column 2: Position
+   - Column 3: All alleles at the locus (pipe-separated)
+   - Column 4: Specific allele
+   - Remaining columns: Frequency data for each entry
+
+# Supported File Extensions
+- '.tsv' (tab-separated, default)
+- '.csv' (comma-separated)
+- '.txt' (custom delimiter)
+
+# Throws
+- `DimensionMismatch`: If the input Genomes struct is corrupted
+- `ErrorException`: If the output file already exists
+- `ArgumentError`: If the file extension is invalid or the output directory doesn't exist
+
+# Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
 julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
 
@@ -374,15 +414,40 @@ function writedelimited(
     return fname
 end
 
-
-
 """
-    readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\\t")::Phenomes
+    readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\\t", verbose::Bool = false)::Phenomes
 
-Load a `Phenomes` struct from a string-delimited (default=\"\\t\") file. 
-Each row corresponds to a locus-allele combination.
-The first 4 columns correspond to the chromosome, position, all alleles in the locus (delimited by \"|\"), and the specific allele.
-The subsequency columns refer to the samples, pools, entries or genotypes.
+Load phenotypic data from a delimited text file into a `Phenomes` struct.
+
+# Arguments
+- `type::Type{Phenomes}`: Type parameter (must be Phenomes)
+- `fname::String`: Path to the input file
+- `sep::String`: Delimiter character (default: tab "\\t")
+- `verbose::Bool`: Whether to show progress bar during loading (default: false)
+
+# File Format
+The file should be a delimited text file with:
+- Header row containing column names
+- First column: Entry identifiers
+- Second column: Population identifiers 
+- Remaining columns: Phenotypic trait values (numeric or missing)
+
+Missing values can be specified as "missing", "NA", "na", "N/A", "n/a" or empty string.
+
+# Returns
+- `Phenomes`: A Phenomes struct containing the loaded phenotypic data
+
+# Throws
+- `ErrorException`: If file doesn't exist or has invalid format
+- `ArgumentError`: If required columns are missing or misnamed
+- `ErrorException`: If duplicate entries or traits are found
+- `ErrorException`: If numeric values cannot be parsed
+
+# Notes
+- Comments starting with '#' are ignored
+- Empty lines are skipped
+- Mathematical operators (+,-,*,/,%) in trait names are replaced with underscores
+- Performs dimension checks on the loaded data
 
 # Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
@@ -564,20 +629,37 @@ function readdelimited(type::Type{Phenomes}; fname::String, sep::String = "\t", 
 end
 
 """
-    writedelimited(phenomes::Phenomes, sep::String = "\t", fname::Union{Missing,String} = missing)::String
+    writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missing, sep::String = "\t")::String
 
-Save `Phenomes` struct as a string-delimited (default=\"\\t\") file. 
-Each row corresponds to a samples, pools, entries or genotypes.
-The first 2 columns correspond to the entry and population names.
-The subsequency columns refer to the traits containing the phenotype values of each entry.
-Note that the extension name should be '.tsv', '.csv', or '.txt'.
+Write phenotypic data from a `Phenomes` struct to a delimited text file.
 
-## Notes:
-- Extension name should be '.tsv', '.csv', or '.txt'.
-- Header line and comments are prefixed by '#'.
-- There is 1 header line prefixed by '#', e.g.: "entry,population,trait_1,trait_2,trait_3"
+# Arguments
+- `phenomes::Phenomes`: A Phenomes struct containing phenotypic data
+- `fname::Union{Missing,String} = missing`: Output filename. If missing, generates an automatic filename with timestamp
+- `sep::String = "\t"`: Delimiter character for the output file
 
-## Examples
+# Returns
+- `String`: The name of the created file
+
+# File Format
+- Header line starts with '#' containing column names
+- First column: Entry names
+- Second column: Population names
+- Remaining columns: Trait values
+- Missing values are represented as "NA"
+
+# File Extensions
+Supported file extensions:
+- `.tsv` for tab-separated files (default)
+- `.csv` for comma-separated files
+- `.txt` for other delimiters
+
+# Throws
+- `DimensionMismatch`: If the Phenomes struct dimensions are inconsistent
+- `ErrorException`: If the output file already exists
+- `ArgumentError`: If the file extension is invalid or the directory doesn't exist
+
+# Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
 julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"];
 
@@ -634,21 +716,43 @@ end
 
 
 """
-    readdelimited(type::Type{Trials}; fname::String, sep::String = "\\t")::Trials
+    readdelimited(type::Type{Trials}; fname::String, sep::String = "\\t", verbose::Bool = false)::Trials
 
-Load a `Trials` struct from a string-delimited (default=\"\\t\") file. 
-We expect the following 10 identifier columns:
-    ‣ years
-    ‣ seasons
-    ‣ harvests
-    ‣ sites
-    ‣ entries
-    ‣ populations
-    ‣ replications
-    ‣ blocks
-    ‣ rows
-    ‣ cols
-All other columns are assumed to be numeric phenotype values.
+Load a `Trials` struct from a string-delimited file.
+
+# Arguments
+- `type::Type{Trials}`: Type parameter (must be `Trials`)
+- `fname::String`: Path to the input file
+- `sep::String = "\\t"`: Delimiter character (default is tab)
+- `verbose::Bool = false`: Whether to display progress information
+
+# Required File Structure
+The input file must contain the following 10 identifier columns:
+- `years`: Year identifiers
+- `seasons`: Season identifiers
+- `harvests`: Harvest identifiers
+- `sites`: Site identifiers
+- `entries`: Entry identifiers
+- `populations`: Population identifiers
+- `replications`: Replication identifiers
+- `blocks`: Block identifiers
+- `rows`: Row identifiers
+- `cols`: Column identifiers
+
+All remaining columns are treated as numeric phenotype measurements. Column names are fuzzy-matched
+to accommodate slight spelling variations.
+
+# Returns
+- `Trials`: A populated Trials struct containing the loaded data
+
+# Notes
+- Missing values can be represented as "missing", "NA", "na", "N/A", "n/a", or empty strings
+- Trait names containing mathematical operators (+, -, *, /, %) are converted to underscores
+- Duplicate trait names are not allowed
+
+# Throws
+- `ErrorException`: If the input file doesn't exist or has invalid format
+- `ArgumentError`: If required columns are missing or ambiguous
 
 # Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
@@ -825,12 +929,23 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
 end
 
 """
-    writedelimited(trials::Trials, sep::String = "\t", fname::Union{Missing,String} = missing)::String
+    writedelimited(trials::Trials; fname::Union{Missing,String} = missing, sep::String = "\t")::String
 
-Save `Trials` struct as a string-delimited (default=\"\\t\") file. 
-Each row corresponds to a samples, pools, entries or genotypes.
-The first 10 columns correspond to:
+Write a `Trials` struct to a delimited text file, returning the filename.
 
+# Arguments
+- `trials::Trials`: The trials data structure to be written
+- `fname::Union{Missing,String} = missing`: Output filename. If missing, generates automatic filename with timestamp
+- `sep::String = "\t"`: Delimiter character between fields
+
+# Returns
+- `String`: The name of the file that was written
+
+# File Format
+The output file contains one header line and one line per trial entry.
+Header line is prefixed with '#' and contains column names.
+
+## Fixed Columns (1-10)
 1. years
 2. seasons
 3. harvests
@@ -840,16 +955,22 @@ The first 10 columns correspond to:
 7. replications
 8. blocks
 9. rows
-10. cols 
+10. cols
 
-The subsequency columns refer to the traits containing the phenotype values.
+## Variable Columns (11+)
+- Additional columns contain phenotype traits values
+- Missing values are written as "NA"
 
-## Notes:
-- Extension name should be '.tsv', '.csv', or '.txt'.
-- Header line and comments are prefixed by '#'.
-- There is 1 header line prefixed by '#', e.g.: "years,seasons,harvests, ..., trait_1,tratit_2,trait_3"
+# Notes
+- Supported file extensions: `.tsv`, `.csv`, or `.txt`
+- File extension is automatically determined based on separator if filename is missing:
+  * `\\t` → `.tsv`
+  * `,` or `;` → `.csv`
+  * other → `.txt`
+- Will not overwrite existing files
+- Directory must exist if path is specified in filename
 
-## Examples
+# Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
 julia> trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.harvests = ["harvest_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"];
 

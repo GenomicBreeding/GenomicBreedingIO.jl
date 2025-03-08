@@ -1,7 +1,18 @@
 """
     readjld2(type::Type; fname::String)::Type
 
-Load a core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects`), and model (`TEBV`) struct from a JLD2 file.
+Load a core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects`), or model (`TEBV`) struct from a JLD2 file.
+
+# Arguments
+- `type::Type`: The type of struct to load (`Genomes`, `Phenomes`, `Trials`, `SimulatedEffects`, or `TEBV`)
+- `fname::String`: Path to the JLD2 file to read from
+
+# Returns
+- The loaded struct of the specified type
+
+# Throws
+- `ArgumentError`: If the specified file does not exist
+- `DimensionMismatch`: If the loaded struct is corrupted
 
 ## Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
@@ -41,13 +52,33 @@ function readjld2(type::Type{T}; fname::String)::T where {T<:AbstractGB}
 end
 
 """
-    writejld2(A::Union{Genomes,Phenomes,Trials,SimulatedEffects}; fname::Union{Missing,String} = missing)::String
+    writejld2(A::Union{Genomes,Phenomes,Trials,SimulatedEffects,TEBV}; fname::Union{Missing,String} = missing)::String
 
-Save core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects`), and model (`TEBV`) structs
-as JLD2,  a heirarchical data format version 5 (HDF5) - compatible format.
-Note that the extension name should be '.jld2'.
+Save genomic breeding core data structures to a JLD2 file (HDF5-compatible format).
 
-## Examples
+# Arguments
+- `A`: A genomic breeding data structure (Genomes, Phenomes, Trials, SimulatedEffects, or TEBV)
+- `fname`: Optional. Output filename. If missing, generates an automatic name with timestamp
+
+# Returns
+- `String`: Path to the saved JLD2 file
+
+# File Naming
+- If `fname` is not provided, generates name: "output-[Type]-[Timestamp].jld2"
+- If `fname` is provided, must have ".jld2" extension
+
+# Throws
+- `DimensionMismatch`: If input structure has invalid dimensions
+- `ErrorException`: If output file already exists
+- `ArgumentError`: If invalid file extension or directory path
+
+# Notes
+- Files are saved with compression enabled
+- Data is stored as a Dictionary with single key-value pair
+- Key is the string representation of the input type
+- Existing files will not be overwritten
+
+# Examples
 ```jldoctest; setup = :(using GBCore, GBIO, JLD2)
 julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
 

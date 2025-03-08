@@ -1,3 +1,25 @@
+"""
+    vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
+
+Count the number of loci and total lines in a VCF file.
+
+# Arguments
+- `fname::String`: Path to the VCF file. Can be either a plain text VCF file or a gzipped VCF file (with extensions .vcf.gz or .vcf.bgz)
+- `verbose::Bool`: If true, prints progress messages and results to stdout
+
+# Returns
+A tuple containing:
+- First element: Total number of lines in the file (Int64)
+- Second element: Number of loci/variants in the file (Int64)
+
+# Description
+This function reads through a VCF file and counts:
+1. The total number of lines in the file
+2. The number of data lines (loci/variants) excluding header lines (those starting with '#')
+
+The function automatically detects if the file is gzipped based on its extension and handles it appropriately.
+
+"""
 function vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
     if verbose
         println("Counting loci...")
@@ -23,7 +45,32 @@ function vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
     end
     total_lines, n_loci
 end
+"""
+    vcf_chunkify(fname::String, verbose::Bool, n_loci::Int64, line_counter::Int64)::Tuple{Vector{Int64},Vector{Int64},Vector{Int64},Vector{Int64}}
 
+Divide a VCF file into chunks for parallel processing by determining file positions and loci indexes
+for each thread.
+
+# Arguments
+- `fname::String`: Path to the VCF file (can be .vcf, .vcf.gz, or .vcf.bgz)
+- `verbose::Bool`: If true, prints progress information
+- `n_loci::Int64`: Total number of loci in the VCF file
+- `line_counter::Int64`: Current line counter position in the file
+
+# Returns
+A tuple containing four Vector{Int64} arrays:
+1. Starting loci indices for each thread
+2. Ending loci indices for each thread
+3. Starting file positions for each thread
+4. Ending file positions for each thread
+
+# Details
+- Automatically detects if the input file is gzipped
+- Divides the workload evenly across available threads
+- Skips header lines (starting with '#')
+- Handles both regular and gzipped VCF files
+
+"""
 function vcf_chunkify(
     fname::String,
     verbose::Bool,
@@ -79,6 +126,32 @@ function vcf_chunkify(
     (idx_loci_per_thread_ini, idx_loci_per_thread_fin, file_pos_per_thread_ini, file_pos_per_thread_fin)
 end
 
+"""
+    vcf_extract_entries_and_formats(fname::String, verbose::Bool)::Tuple{Vector{String},Vector{String}}
+
+Extract sample entries and format definitions from a VCF file.
+
+# Arguments
+- `fname::String`: Path to the VCF file (can be gzipped with extensions .vcf.gz or .vcf.bgz)
+- `verbose::Bool`: If true, prints progress information to stdout
+
+# Returns
+A tuple containing:
+- `Vector{String}`: List of sample names from the VCF header
+- `Vector{String}`: List of FORMAT field definitions from the VCF metadata
+
+# Description
+This function reads a VCF file and extracts:
+1. The sample names from the header line (columns after the FORMAT field)
+2. The FORMAT field definitions from the metadata lines starting with "##FORMAT"
+
+# Throws
+- `ArgumentError`: If the VCF file has fewer than expected columns or if the column names don't match the expected VCF format
+
+# Note
+The function validates the presence and order of the standard VCF columns:
+#CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO, and FORMAT
+"""
 function vcf_extract_entries_and_formats(fname::String, verbose::Bool)::Tuple{Vector{String},Vector{String}}
     # Column index of the start of genotype data
     IDX::Int64 = 10
@@ -148,6 +221,34 @@ function vcf_extract_entries_and_formats(fname::String, verbose::Bool)::Tuple{Ve
     (entries, format_lines)
 end
 
+
+"""
+    vcf_extract_info(fname::String, verbose::Bool, field::String, format_lines::Vector{String})::Tuple{String,Int64,Int64}
+
+Extract information about genotype fields from a VCF file.
+
+# Arguments
+- `fname::String`: Path to the VCF file (can be gzipped)
+- `verbose::Bool`: If true, prints progress information
+- `field::String`: Specific field to extract ("GT", "AD", "AF", or "any")
+- `format_lines::Vector{String}`: Vector containing FORMAT lines from the VCF header
+
+# Returns
+A tuple containing:
+1. `field::String`: The identified genotype field
+2. `n_alleles::Int64`: Maximum number of alleles per locus
+3. `ploidy::Int64`: Ploidy level (only meaningful for GT field)
+
+# Details
+- If `field` is "any", searches for fields in priority order: AF > AD > GT
+- For GT field, scans entire file to determine maximum number of alleles and ploidy
+- For AF and AD fields, extracts allele count from format header
+- Supports both gzipped (.gz, .bgz) and uncompressed VCF files
+
+# Throws
+- `ArgumentError`: If specified field is not found in the VCF file
+- `ErrorException`: If unable to parse number of alleles from format header
+"""
 function vcf_extract_info(
     fname::String,
     verbose::Bool,
@@ -240,6 +341,28 @@ function vcf_extract_info(
     (field, n_alleles, ploidy)
 end
 
+"""
+    vcf_instantiate_output(fname::String, verbose::Bool, entries::Vector{String}, n_loci::Int64, n_alleles::Int64)::Genomes
+
+Create and initialize a Genomes struct from VCF file parameters.
+
+# Arguments
+- `fname::String`: Name of the VCF file being processed
+- `verbose::Bool`: If true, prints progress information
+- `entries::Vector{String}`: Vector containing entry identifiers
+- `n_loci::Int64`: Number of loci in the VCF file
+- `n_alleles::Int64`: Number of alleles per locus
+
+# Returns
+- `Genomes`: An initialized Genomes struct with:
+  - dimensions n × p where n is number of entries and p = n_loci * (n_alleles - 1)
+  - entry names assigned
+  - populations set to "unknown"
+  - mask set to true
+  
+# Throws
+- `ErrorException`: If duplicate entries are found in the VCF file
+"""
 function vcf_instantiate_output(
     fname::String,
     verbose::Bool,
@@ -280,6 +403,36 @@ function vcf_instantiate_output(
     genomes
 end
 
+"""
+    vcf_parse_coordinates(line::Vector{String}, line_counter::Int64, field::String, entries::Vector{String})::Union{Nothing,Tuple{Int64,String,Int64,String,Vector{String},Vector{String}}}
+
+Parse coordinates and allele information from a VCF file line.
+
+# Arguments
+- `line::Vector{String}`: A vector containing the split line from VCF file
+- `line_counter::Int64`: Current line number being processed in the VCF file
+- `field::String`: The field name to extract allele frequencies from
+- `entries::Vector{String}`: Vector of sample entries from the VCF header
+
+# Returns
+- `Nothing`: If the specified field is not found in the line
+- `Tuple{Int64,String,Int64,String,Vector{String},Vector{String}}`: A tuple containing:
+    - Field index
+    - Chromosome name
+    - Position
+    - Reference allele
+    - Alternative alleles
+    - Combined reference and alternative alleles
+
+# Throws
+- `ErrorException`: If the number of columns doesn't match the header
+- `ErrorException`: If the position field cannot be parsed as an integer
+
+# Note
+The function validates the line format and extracts genomic coordinates and allele information
+from a VCF file line. It handles missing alternative alleles (denoted by ".") and performs
+necessary type conversions.
+"""
 function vcf_parse_coordinates(
     line::Vector{String},
     line_counter::Int64,
@@ -332,6 +485,46 @@ function vcf_parse_coordinates(
     (idx_field[1], chrom, pos, ref, alt, refalts)
 end
 
+"""
+    vcf_extract_allele_freqs!(genomes, pb, i, fname, verbose, line_counter, field, idx_field, line, chrom, pos, ref, alt, refalts)
+
+Extract allele frequencies from VCF file data and update the `genomes` object.
+
+# Arguments
+- `genomes::Genomes`: Object storing genomic data and allele frequencies
+- `pb::Union{Nothing,Progress}`: Progress bar object for tracking progress
+- `i::Int64`: Current index for tracking position in genomic data
+- `fname::String`: Name of the VCF file being processed
+- `verbose::Bool`: Flag to control progress bar display
+- `line_counter::Int64`: Current line number in the VCF file
+- `field::String`: Type of field to extract ("AF", "AD", or "GT")
+- `idx_field::Int64`: Index of the field in the VCF format
+- `line::Vector{String}`: Current line from VCF file split into fields
+- `chrom::String`: Chromosome identifier
+- `pos::Int64`: Position on chromosome
+- `ref::String`: Reference allele
+- `alt::Vector{String}`: Alternative alleles
+- `refalts::Vector{String}`: Combined vector of reference and alternative alleles
+
+# Returns
+Tuple containing:
+- Updated `genomes` object
+- Progress bar object
+- Updated index `i`
+
+# Description
+Processes VCF data to extract allele frequencies using one of three methods:
+- AF (Allele Frequencies): Direct frequency values
+- AD (Allele Depths): Calculated from read depths
+- GT (Genotypes): Calculated from genotype calls
+
+Missing values are handled appropriately for each method. The function updates the
+`genomes.loci_alleles` and `genomes.allele_frequencies` fields with the extracted data.
+
+# Throws
+- `ErrorException`: If unable to parse AF or AD fields
+- `ArgumentError`: If an unrecognized field type is specified
+"""
 function vcf_extract_allele_freqs!(
     genomes::Genomes,
     pb::Union{Nothing,Progress},
@@ -439,9 +632,31 @@ function vcf_extract_allele_freqs!(
 end
 
 """
-    readvcf(;fname::String, field::String = "any", verbose::Bool = false)::Genomes
+    readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
 
-Load Genomes struct from vcf file
+Read genetic data from a VCF (Variant Call Format) file into a Genomes struct.
+
+# Arguments
+- `fname::String`: Path to the VCF file. Can be gzipped (.vcf.gz or .vcf.bgz) or uncompressed (.vcf)
+- `field::String="any"`: Which FORMAT field to extract from VCF. Default "any" tries to automatically detect genotype field
+- `verbose::Bool=false`: Whether to print progress and debug information
+
+# Returns
+- `Genomes`: A Genomes struct containing the loaded genetic data with fields:
+  - `allele_frequencies`: Matrix of allele frequencies
+  - `loci_alleles`: Vector of locus-allele combination strings
+  - `mask`: Boolean matrix indicating missing data
+  - `samples`: Vector of sample names
+
+# Details
+Reads VCF files in parallel using multiple threads. Handles multi-allelic variants and different ploidies. 
+Performs various checks on the input data including:
+- File existence
+- No duplicate loci-allele combinations 
+- Consistent dimensions in output struct
+
+# Throws
+- `ErrorException`: If file doesn't exist, has duplicates, or output dimensions are invalid
 
 # Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
@@ -605,11 +820,38 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
 end
 
 """
-    writevcf(genomes::Genomes; fname::Union{Missing,String}, ploidy::Int64=0, max_depth::Int64=100, n_decimal_places::Int64=4)::String
+    writevcf(genomes::Genomes; fname::Union{Missing,String} = missing, ploidy::Int64 = 0, 
+             max_depth::Int64 = 100, n_decimal_places::Int64 = 4, gzip::Bool = false)::String
 
-Save `Genomes` struct as a variant call format (VCF version 4.2) file.
+Write genomic data to a Variant Call Format (VCF) file.
 
-## Examples
+# Arguments
+- `genomes::Genomes`: A Genomes object containing the genetic data to be written.
+- `fname::Union{Missing,String} = missing`: Output filename. If missing, generates a default name with timestamp.
+- `ploidy::Int64 = 0`: The ploidy level of the organisms (e.g., 2 for diploid).
+- `max_depth::Int64 = 100`: Maximum depth for allele depth calculation.
+- `n_decimal_places::Int64 = 4`: Number of decimal places for rounding allele frequencies.
+- `gzip::Bool = false`: Whether to compress the output file using gzip.
+
+# Returns
+- `String`: The name of the created VCF file.
+
+# Description
+Creates a VCF v4.2 format file containing genomic variants data. The function processes
+allele frequencies and depths, calculates genotypes based on ploidy, and formats the
+data according to VCF specifications. The output includes:
+- Standard VCF header information
+- Sample information with FORMAT fields:
+  * GT (Genotype)
+  * AD (Allele Depth)
+  * AF (Allele Frequency)
+
+# Throws
+- `DimensionMismatch`: If the input Genomes object has inconsistent dimensions
+- `ErrorException`: If the output file already exists
+- `ArgumentError`: If the file extension is not '.vcf' or if the specified directory doesn't exist
+
+# Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
 julia> genomes_1 = GBCore.simulategenomes(n=2, verbose=false);
 
