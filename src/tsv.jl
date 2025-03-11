@@ -86,7 +86,8 @@ function readdelimited(
                 fname *
                 "` have less than " *
                 string(IDX) *
-                " columns. We expect in order the following column names: \n\t• " *
+                " columns. The file may not be tab-delimited.\n" * 
+                "We expect the following column names in order: \n\t• " *
                 join(expected_colnames, "\n\t• "),
             ),
         )
@@ -574,8 +575,8 @@ Note that the extension name should be '.tsv', '.csv', or '.txt'.
 
 ## Notes:
 - Extension name should be '.tsv', '.csv', or '.txt'.
-- Header line and comments are prefixed by '#'.
-- There is 1 header line prefixed by '#', e.g.: "entry,population,trait_1,trait_2,trait_3"
+- Comments are prefixed by '#'.
+- There is 1 header line, e.g.: "entry,population,trait_1,trait_2,trait_3"
 
 ## Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
@@ -617,7 +618,7 @@ function writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missi
     # Write into a new text file
     open(fname, "w") do file
         # Header line
-        header::Vector{String} = ["#entries", "populations"]
+        header::Vector{String} = ["entries", "populations"]
         append!(header, phenomes.traits)
         header[end] *= "\n"
         write(file, join(header, sep))
@@ -753,7 +754,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
                     ErrorException(
                         "The header line and line: " *
                         string(line_counter) *
-                        " of the genomes file: '" *
+                        " of the trials file: '" *
                         fname *
                         "' do have the same number of columns.",
                     ),
@@ -846,8 +847,8 @@ The subsequency columns refer to the traits containing the phenotype values.
 
 ## Notes:
 - Extension name should be '.tsv', '.csv', or '.txt'.
-- Header line and comments are prefixed by '#'.
-- There is 1 header line prefixed by '#', e.g.: "years,seasons,harvests, ..., trait_1,tratit_2,trait_3"
+- Comments are prefixed by '#'.
+- There is 1 header line, e.g.: "years,seasons,harvests, ..., trait_1,tratit_2,trait_3"
 
 ## Examples
 ```jldoctest; setup = :(using GBCore, GBIO)
@@ -890,7 +891,7 @@ function writedelimited(trials::Trials; fname::Union{Missing,String} = missing, 
     open(fname, "w") do file
         # Header line
         header::Vector{String} = [
-            "#years",
+            "years",
             "seasons",
             "harvests",
             "sites",

@@ -9,13 +9,39 @@ function vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
     else
         open(fname, "r")
     end
-    for raw_line in eachline(file)
-        # raw_line = readline(file)
-        total_lines += 1
-        if (raw_line[1] != '#') && (total_lines > 1) && (length(raw_line) > 0)
-            n_loci += 1
-        end
+    size_mb = 1024*1024
+    buff::Vector{Char} = fill('.', size_mb)
+    try
+        seekend(file)
+    catch
+       filesize(fname)
     end
+    pos_fin = position(file)
+    seekstart(file)
+    n_buffers = Int(ceil(pos_fin / size_mb))
+    pb = if verbose
+        ProgressMeter.Progress(n_buffers; desc = "Counting loci: ")
+    end
+    for i in 1:(n_buffers-1)
+        buff .= read(file, size_mb)
+        idx = findall(buff .== '\n')
+        if length(idx) >= 1
+            total_lines += length(idx)
+            idx = idx .+ 1
+            idx[end] > size_mb ? idx = idx[1:(end-1)] : nothing
+            n_loci += sum(buff[idx] .!= '#')
+        end
+        ProgressMeter.next!(pb)
+    end
+    b::Vector{Char} = read(file, size_mb)
+    idx = findall(b .== '\n')
+    if length(idx) >= 1
+        total_lines += length(idx)
+        idx = idx .+ 1
+        idx[end] > length(b) ? idx = idx[1:(end-1)] : nothing
+        n_loci += sum(b[idx] .!= '#')
+    end
+    ProgressMeter.finish!(pb)
     close(file)
     if verbose
         println(string("Total number of lines: ", total_lines))
