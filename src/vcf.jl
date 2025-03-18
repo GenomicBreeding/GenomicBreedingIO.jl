@@ -1,26 +1,49 @@
 """
-    vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
+    vcfcountloci(fname::String; verbose::Bool = false)::Tuple{Int64,Int64}
 
 Count the number of loci and total lines in a VCF file.
 
 # Arguments
 - `fname::String`: Path to the VCF file. Can be either a plain text VCF file or a gzipped VCF file (with extensions .vcf.gz or .vcf.bgz)
-- `verbose::Bool`: If true, prints progress messages and results to stdout
+- `verbose::Bool`: If true, prints progress messages and results to stdout. Defaults to false.
 
 # Returns
-A tuple containing:
-- First element: Total number of lines in the file (Int64)
-- Second element: Number of loci/variants in the file (Int64)
+- `Tuple{Int64,Int64}`: A tuple containing:
+    - First element: Total number of lines in the file (including headers)
+    - Second element: Number of data lines (variants/loci) excluding header lines
 
 # Description
-This function reads through a VCF file and counts:
-1. The total number of lines in the file
-2. The number of data lines (loci/variants) excluding header lines (those starting with '#')
+Reads through a VCF (Variant Call Format) file and counts:
+1. Total lines in the file (including headers)
+2. Number of data lines (variants/loci) that don't start with '#'
 
-The function automatically detects if the file is gzipped based on its extension and handles it appropriately.
+The function automatically detects and handles different file formats:
+- Plain text VCF files (.vcf)
+- Gzipped VCF files (.vcf.gz)
+- BGZipped VCF files (.vcf.bgz)
 
+# Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+
+julia> fname = writevcf(genomes);
+
+julia> fname_gz = writevcf(genomes, gzip=true);
+
+julia> n_1, p_1 = vcfcountloci(fname);
+
+julia> n_2, p_2 = vcfcountloci(fname_gz);
+
+julia> n_1 == n_2 == 10_009
+true
+
+julia> p_1 == p_2 == 10_000
+true
+
+julia> rm.([fname, fname_gz]);
+```
 """
-function vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
+function vcfcountloci(fname::String; verbose::Bool = false)::Tuple{Int64,Int64}
     if verbose
         println("Counting loci...")
     end
@@ -34,7 +57,7 @@ function vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
     for raw_line in eachline(file)
         # raw_line = readline(file)
         total_lines += 1
-        if (raw_line[1] != '#') && (total_lines > 1) && (length(raw_line) > 0)
+        if (raw_line[1] != '#') && (length(raw_line) > 0)
             n_loci += 1
         end
     end
@@ -45,17 +68,16 @@ function vcf_count_loci(fname::String, verbose::Bool)::Tuple{Int64,Int64}
     end
     total_lines, n_loci
 end
-"""
-    vcf_chunkify(fname::String, verbose::Bool, n_loci::Int64, line_counter::Int64)::Tuple{Vector{Int64},Vector{Int64},Vector{Int64},Vector{Int64}}
 
-Divide a VCF file into chunks for parallel processing by determining file positions and loci indexes
-for each thread.
+"""
+    vcfchunkify(fname::String; n_loci::Int64, verbose::Bool = false)::Tuple{Vector{Int64},Vector{Int64},Vector{Int64},Vector{Int64}}
+
+Divide a VCF file into chunks for parallel processing.
 
 # Arguments
 - `fname::String`: Path to the VCF file (can be .vcf, .vcf.gz, or .vcf.bgz)
-- `verbose::Bool`: If true, prints progress information
 - `n_loci::Int64`: Total number of loci in the VCF file
-- `line_counter::Int64`: Current line counter position in the file
+- `verbose::Bool=false`: If true, prints progress information
 
 # Returns
 A tuple containing four Vector{Int64} arrays:
@@ -70,45 +92,70 @@ A tuple containing four Vector{Int64} arrays:
 - Skips header lines (starting with '#')
 - Handles both regular and gzipped VCF files
 
+# Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+
+julia> fname = writevcf(genomes);
+
+julia> _, n_loci = vcfcountloci(fname);
+
+julia> idx_loci_per_thread_ini, idx_loci_per_thread_fin, file_pos_per_thread_ini, file_pos_per_thread_fin = vcfchunkify(fname, n_loci=n_loci);
+
+julia> length(idx_loci_per_thread_ini) == length(idx_loci_per_thread_fin) == length(file_pos_per_thread_ini) == length(file_pos_per_thread_fin)
+true
+
+julia> (idx_loci_per_thread_ini[1] == 0) && (sum(idx_loci_per_thread_ini .== 0) == 1)
+true
+
+julia> (idx_loci_per_thread_fin[end] == n_loci) && (sum(idx_loci_per_thread_fin .== 0) == 0)
+true
+
+julia> (sum(file_pos_per_thread_ini .== 0) == 0) && (sum(file_pos_per_thread_fin .== 0) == 0)
+true
+
+julia> rm(fname);
+```
 """
-function vcf_chunkify(
-    fname::String,
-    verbose::Bool,
+function vcfchunkify(
+    fname::String;
     n_loci::Int64,
-    line_counter::Int64,
+    verbose::Bool = false,
 )::Tuple{Vector{Int64},Vector{Int64},Vector{Int64},Vector{Int64}}
     if verbose
         println("Counting threads and identifying the file positions and loci indexes per thread...")
     end
     n_threads = Threads.nthreads()
-    n_lines_per_thread = Int(round(n_loci / n_threads))
+    n_lines_per_thread = Int(ceil(n_loci / n_threads))
     idx_loci_per_thread_ini = vcat([0], cumsum(repeat([n_lines_per_thread], n_threads - 1)))
     idx_loci_per_thread_fin = idx_loci_per_thread_ini .+ (n_lines_per_thread - 1)
     idx_loci_per_thread_fin[end] = n_loci
-    file_pos_per_thread_ini = []
-    file_pos_per_thread_fin = []
+    file_pos_per_thread_ini::Vector{Int64} = zeros(n_threads)
+    file_pos_per_thread_fin::Vector{Int64} = zeros(n_threads)
     file = if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
         GZip.open(fname, "r")
     else
         open(fname, "r")
     end
+    i = 1
     counter::Int64 = 0
     previous_pos = position(file)
     for raw_line in eachline(file)
         # raw_line = readline(file)
-        if (raw_line[1] != '#') && (line_counter > 1) && (length(raw_line) > 0)
+        if (raw_line[1] != '#') && (length(raw_line) > 0)
             counter += 1
             if counter == 1
-                append!(file_pos_per_thread_ini, previous_pos)
+                file_pos_per_thread_ini[i] = previous_pos
             end
             if counter == n_lines_per_thread
-                append!(file_pos_per_thread_fin, position(file))
+                file_pos_per_thread_fin[i] = position(file)
+                i += 1
                 counter = 0
             end
         end
         previous_pos = position(file)
     end
-    if length(file_pos_per_thread_fin) == (n_threads - 1)
+    if file_pos_per_thread_fin[end] == 0
         try
             seekend(file)
         catch
@@ -116,9 +163,8 @@ function vcf_chunkify(
                 readline(file)
             end
         end
-        append!(file_pos_per_thread_fin, position(file))
+        file_pos_per_thread_fin[i] = position(file)
     end
-    # file_pos_per_thread_fin[end] = position(file)
     close(file)
     if verbose
         println(string("Total number of threads: ", n_threads))
@@ -127,32 +173,61 @@ function vcf_chunkify(
 end
 
 """
-    vcf_extract_entries_and_formats(fname::String, verbose::Bool)::Tuple{Vector{String},Vector{String}}
+    vcfextractentriesandformats(fname::String; verbose::Bool = false)::Tuple{Vector{String},Vector{String}}
 
 Extract sample entries and format definitions from a VCF file.
 
 # Arguments
 - `fname::String`: Path to the VCF file (can be gzipped with extensions .vcf.gz or .vcf.bgz)
-- `verbose::Bool`: If true, prints progress information to stdout
+- `verbose::Bool=false`: If true, prints progress information to stdout
 
 # Returns
 A tuple containing:
-- `Vector{String}`: List of sample names from the VCF header
-- `Vector{String}`: List of FORMAT field definitions from the VCF metadata
+1. `Vector{String}`: List of sample names from the VCF header
+2. `Vector{String}`: List of FORMAT field definitions from the VCF metadata
 
 # Description
-This function reads a VCF file and extracts:
-1. The sample names from the header line (columns after the FORMAT field)
-2. The FORMAT field definitions from the metadata lines starting with "##FORMAT"
+Reads a VCF file and extracts two key pieces of information:
+1. Sample names from the header line (columns after FORMAT field)
+2. FORMAT field definitions from metadata lines starting with "##FORMAT"
+
+The function validates the presence and correct order of standard VCF columns:
+CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO, and FORMAT
 
 # Throws
-- `ArgumentError`: If the VCF file has fewer than expected columns or if the column names don't match the expected VCF format
+- `ArgumentError`: If VCF has fewer than expected columns or column names don't match VCF format
 
-# Note
-The function validates the presence and order of the standard VCF columns:
-#CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO, and FORMAT
+# Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+
+julia> fname = writevcf(genomes);
+
+julia> entries, format_lines = vcfextractentriesandformats(fname);
+
+julia> entries
+10-element Vector{String}:
+ "entry_01"
+ "entry_02"
+ "entry_03"
+ "entry_04"
+ "entry_05"
+ "entry_06"
+ "entry_07"
+ "entry_08"
+ "entry_09"
+ "entry_10"
+
+julia> format_lines
+3-element Vector{String}:
+ "##FORMAT=<ID=GT,Number=1,Type=String,Description=\\"Genotype\\">"
+ "##FORMAT=<ID=AD,Number=2,Type=Float,Description=\\"Allele Depth\\">"
+ "##FORMAT=<ID=AF,Number=2,Type=Float,Description=\\"Allele Frequency\\">"
+
+julia> rm(fname);
+```
 """
-function vcf_extract_entries_and_formats(fname::String, verbose::Bool)::Tuple{Vector{String},Vector{String}}
+function vcfextractentriesandformats(fname::String; verbose::Bool = false)::Tuple{Vector{String},Vector{String}}
     # Column index of the start of genotype data
     IDX::Int64 = 10
     if verbose
@@ -218,26 +293,27 @@ function vcf_extract_entries_and_formats(fname::String, verbose::Bool)::Tuple{Ve
     if verbose
         println(string("Total number of entries: ", length(entries)))
     end
+    # Output
     (entries, format_lines)
 end
 
 
 """
-    vcf_extract_info(fname::String, verbose::Bool, field::String, format_lines::Vector{String})::Tuple{String,Int64,Int64}
+    vcfextractinfo(fname::String; format_lines::Vector{String}, field::String="any", verbose::Bool=false)::Tuple{String,Int64,Int64}
 
 Extract information about genotype fields from a VCF file.
 
 # Arguments
 - `fname::String`: Path to the VCF file (can be gzipped)
-- `verbose::Bool`: If true, prints progress information
-- `field::String`: Specific field to extract ("GT", "AD", "AF", or "any")
 - `format_lines::Vector{String}`: Vector containing FORMAT lines from the VCF header
+- `field::String="any"`: Specific field to extract ("GT", "AD", "AF", or "any")
+- `verbose::Bool=false`: If true, prints progress information
 
 # Returns
 A tuple containing:
 1. `field::String`: The identified genotype field
 2. `n_alleles::Int64`: Maximum number of alleles per locus
-3. `ploidy::Int64`: Ploidy level (only meaningful for GT field)
+3. `ploidy::Int64`: Ploidy level (only meaningful for GT field; set to typemax(Int64) for AD and AF fields)
 
 # Details
 - If `field` is "any", searches for fields in priority order: AF > AD > GT
@@ -248,17 +324,33 @@ A tuple containing:
 # Throws
 - `ArgumentError`: If specified field is not found in the VCF file
 - `ErrorException`: If unable to parse number of alleles from format header
+
+# Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+
+julia> fname = writevcf(genomes);
+
+julia> _, format_lines = vcfextractentriesandformats(fname);
+
+julia> field, n_alleles, ploidy = vcfextractinfo(fname, format_lines=format_lines);
+
+julia> (field == "AF") && (n_alleles == 2) && (ploidy == typemax(Int64))
+true
+
+julia> rm(fname);
+```
 """
-function vcf_extract_info(
-    fname::String,
-    verbose::Bool,
-    field::String,
+function vcfextractinfo(
+    fname::String;
     format_lines::Vector{String},
+    field::String = "any",
+    verbose::Bool = false,
 )::Tuple{String,Int64,Int64}
     # Column index of the start of genotype data
     IDX::Int64 = 10
     # Choose field where priority order starts with AF with the highest priority followed by AD, and finally GT
-    if field == "any"
+    idx = if field == "any"
         idx = findall(.!isnothing.(match.(r"ID=AF", format_lines)))
         if length(idx) == 0
             idx = findall(.!isnothing.(match.(r"ID=AD", format_lines)))
@@ -267,15 +359,15 @@ function vcf_extract_info(
             idx = findall(.!isnothing.(match.(r"ID=GT", format_lines)))
         end
         if length(idx) == 0
-            throw(
-                ArgumentError("The input vcf file: `" * fname * "` does not have `AF`, `AD`, or `GT` genotype fields."),
-            )
+            throw(ArgumentError("The input vcf file: `" * fname * "` does not have `AF`, `AD`, or `GT` genotype fields."))
         end
+        idx
     else
         idx = findall(.!isnothing.(match.(Regex(field), format_lines)))
         if length(idx) == 0
             throw(ArgumentError("The input vcf file: `" * fname * "` does not have `" * field * "` field."))
         end
+        idx
     end
     # Define the field and the maximum number of alleles per locus
     if verbose
@@ -283,9 +375,7 @@ function vcf_extract_info(
     end
     format_details = split(format_lines[idx[1]], ",")
     field = split(format_details[.!isnothing.(match.(r"ID=", format_details))][1], "=")[end]
-    n_alleles = 0
-    ploidy = 0 # only for "GT" field - not used for "AD" and "AF" fields
-    if field == "GT"
+    n_alleles, ploidy = if field == "GT"
         # Computationally expensive allele counting for field=="GT":
         file =
             if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
@@ -293,6 +383,8 @@ function vcf_extract_info(
             else
                 open(fname, "r")
             end
+        n_alleles = 0
+        ploidy = 0
         for raw_line in eachline(file)
             line = split(raw_line, "\t")
             if line[1][1] == '#'
@@ -304,6 +396,7 @@ function vcf_extract_info(
             if n_alleles < a
                 n_alleles = a
             end
+            # Ploidy only for "GT" field - not used for "AD" and "AF" fields
             if ploidy < ψ
                 ploidy = ψ
             end
@@ -313,6 +406,7 @@ function vcf_extract_info(
             println("Field identified: \"GT\"")
             println(string("Ploidy: ", ploidy))
         end
+        n_alleles, ploidy
     else
         # Easy n_alleles extraction for "AF" and "AD" fields
         n_alleles = try
@@ -337,21 +431,23 @@ function vcf_extract_info(
             println("Field identified: " * field)
             println(string("Number of alleles per locus: ", n_alleles))
         end
+        n_alleles, typemax(Int64)
     end
+    # Output
     (field, n_alleles, ploidy)
 end
 
 """
-    vcf_instantiate_output(fname::String, verbose::Bool, entries::Vector{String}, n_loci::Int64, n_alleles::Int64)::Genomes
+    vcfinstantiateoutput(fname::String; entries::Vector{String}, n_loci::Int64, n_alleles::Int64, verbose::Bool = false)::Genomes
 
 Create and initialize a Genomes struct from VCF file parameters.
 
 # Arguments
 - `fname::String`: Name of the VCF file being processed
-- `verbose::Bool`: If true, prints progress information
 - `entries::Vector{String}`: Vector containing entry identifiers
 - `n_loci::Int64`: Number of loci in the VCF file
 - `n_alleles::Int64`: Number of alleles per locus
+- `verbose::Bool=false`: If true, prints progress information
 
 # Returns
 - `Genomes`: An initialized Genomes struct with:
@@ -362,13 +458,36 @@ Create and initialize a Genomes struct from VCF file parameters.
   
 # Throws
 - `ErrorException`: If duplicate entries are found in the VCF file
+
+# Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+
+julia> fname = writevcf(genomes);
+
+julia> entries, format_lines = vcfextractentriesandformats(fname);
+
+julia> _, n_loci = vcfcountloci(fname);
+
+julia> _, n_alleles, _ = vcfextractinfo(fname, format_lines=format_lines);
+
+julia> genomes_instantiated = vcfinstantiateoutput(fname, entries=entries, n_loci=n_loci, n_alleles=n_alleles);
+
+julia> size(genomes_instantiated.allele_frequencies)
+(10, 10000)
+
+julia> genomes_instantiated.entries == entries
+true
+
+julia> rm(fname);
+```
 """
-function vcf_instantiate_output(
-    fname::String,
-    verbose::Bool,
+function vcfinstantiateoutput(
+    fname::String;
     entries::Vector{String},
     n_loci::Int64,
     n_alleles::Int64,
+    verbose::Bool = false,
 )::Genomes
     # Define the expected dimensions of the Genomes struct
     if verbose
@@ -376,7 +495,7 @@ function vcf_instantiate_output(
     end
     n = length(entries)
     p = n_loci * (n_alleles - 1)
-    # Instatiate the output struct
+    # Instantiate the output struct
     genomes = Genomes(n = n, p = p)
     genomes.entries = entries
     genomes.populations .= "unknown"
@@ -404,7 +523,7 @@ function vcf_instantiate_output(
 end
 
 """
-    vcf_parse_coordinates(line::Vector{String}, line_counter::Int64, field::String, entries::Vector{String})::Union{Nothing,Tuple{Int64,String,Int64,String,Vector{String},Vector{String}}}
+    vcfparsecoordinates(; line::Vector{String}, line_counter::Int64, field::String)::Union{Nothing,Tuple{Int64,String,Int64,Vector{String}}}
 
 Parse coordinates and allele information from a VCF file line.
 
@@ -412,44 +531,48 @@ Parse coordinates and allele information from a VCF file line.
 - `line::Vector{String}`: A vector containing the split line from VCF file
 - `line_counter::Int64`: Current line number being processed in the VCF file
 - `field::String`: The field name to extract allele frequencies from
-- `entries::Vector{String}`: Vector of sample entries from the VCF header
 
 # Returns
 - `Nothing`: If the specified field is not found in the line
-- `Tuple{Int64,String,Int64,String,Vector{String},Vector{String}}`: A tuple containing:
+- `Tuple{Int64,String,Int64,Vector{String}}`: A tuple containing:
     - Field index
     - Chromosome name
     - Position
-    - Reference allele
-    - Alternative alleles
     - Combined reference and alternative alleles
 
 # Throws
-- `ErrorException`: If the number of columns doesn't match the header
 - `ErrorException`: If the position field cannot be parsed as an integer
 
 # Note
 The function validates the line format and extracts genomic coordinates and allele information
 from a VCF file line. It handles missing alternative alleles (denoted by ".") and performs
 necessary type conversions.
+
+# Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+
+julia> fname = writevcf(genomes);
+
+julia> entries, format_lines = vcfextractentriesandformats(fname);
+
+julia> field, _, _ = vcfextractinfo(fname, format_lines=format_lines);
+
+julia> file = open(fname, "r"); line::Vector{String} = split([readline(file) for i in 1:10][end], "\t"); close(file);
+
+julia> idx_field, chrom, pos, refalts = vcfparsecoordinates(line=line, line_counter=10, field=field);
+
+julia> (idx_field == 3) && (chrom == line[1]) && (pos == parse(Int64, line[2])) && (refalts == line[4:5])
+true
+
+julia> rm(fname);
+```
 """
-function vcf_parse_coordinates(
+function vcfparsecoordinates(;
     line::Vector{String},
     line_counter::Int64,
     field::String,
-    entries::Vector{String},
-)::Union{Nothing,Tuple{Int64,String,Int64,String,Vector{String},Vector{String}}}
-    if (length(entries) + 9) != length(line)
-        throw(
-            ErrorException(
-                "The header line and line: " *
-                string(line_counter) *
-                " of the vcf file: '" *
-                fname *
-                "' do have the same number of columns.",
-            ),
-        )
-    end
+)::Union{Nothing,Tuple{Int64,String,Int64,Vector{String}}}
     # Find the field from which we will extract the allele frequencies from
     idx_field = findall(split(line[9], ":") .== field)
     # Skip the line if the field is absent
@@ -482,68 +605,94 @@ function vcf_parse_coordinates(
     else
         [ref]
     end
-    (idx_field[1], chrom, pos, ref, alt, refalts)
+    (idx_field[1], chrom, pos, refalts)
 end
 
 """
-    vcf_extract_allele_freqs!(genomes, pb, i, fname, verbose, line_counter, field, idx_field, line, chrom, pos, ref, alt, refalts)
+    vcfextractallelefreqs!(input::Vector{Any}; fname::String, line::Vector{String}, 
+                          line_counter::Int64, field::String, verbose::Bool = false)
 
-Extract allele frequencies from VCF file data and update the `genomes` object.
+Extract allele frequencies from VCF file data and update a Genomes object.
 
 # Arguments
-- `genomes::Genomes`: Object storing genomic data and allele frequencies
-- `pb::Union{Nothing,Progress}`: Progress bar object for tracking progress
-- `i::Int64`: Current index for tracking position in genomic data
-- `fname::String`: Name of the VCF file being processed
-- `verbose::Bool`: Flag to control progress bar display
-- `line_counter::Int64`: Current line number in the VCF file
-- `field::String`: Type of field to extract ("AF", "AD", or "GT")
-- `idx_field::Int64`: Index of the field in the VCF format
+- `input::Vector{Any}`: Vector containing:
+  1. `genomes::Genomes`: Object to store genomic data 
+  2. `pb::Union{Nothing,Progress}`: Progress bar object or nothing
+  3. `i::Int64`: Current locus-allele index
+- `fname::String`: Name of VCF file being processed
 - `line::Vector{String}`: Current line from VCF file split into fields
-- `chrom::String`: Chromosome identifier
-- `pos::Int64`: Position on chromosome
-- `ref::String`: Reference allele
-- `alt::Vector{String}`: Alternative alleles
-- `refalts::Vector{String}`: Combined vector of reference and alternative alleles
+- `line_counter::Int64`: Current line number in VCF file
+- `field::String`: Type of field to extract ("AF", "AD", or "GT")
+- `verbose::Bool=false`: Whether to display progress updates
 
 # Returns
-Tuple containing:
-- Updated `genomes` object
-- Progress bar object
-- Updated index `i`
+Updates the input vector's elements in place:
+- First element (genomes): Updated with new allele frequencies
+- Second element (progress bar): Advanced if verbose=true
+- Third element (index): Incremented based on processed alleles
 
 # Description
-Processes VCF data to extract allele frequencies using one of three methods:
-- AF (Allele Frequencies): Direct frequency values
-- AD (Allele Depths): Calculated from read depths
-- GT (Genotypes): Calculated from genotype calls
+Processes VCF data to extract allele frequencies using:
+- AF field: Direct frequency values
+- AD field: Calculated from read depths
+- GT field: Calculated from genotype calls 
 
-Missing values are handled appropriately for each method. The function updates the
-`genomes.loci_alleles` and `genomes.allele_frequencies` fields with the extracted data.
+Updates Genomes object with coordinates and frequencies for each allele.
 
 # Throws
+- `ArgumentError`: If input vector elements have incorrect types
 - `ErrorException`: If unable to parse AF or AD fields
-- `ArgumentError`: If an unrecognized field type is specified
+
+# Examples
+```jldoctest; setup = :(using GBCore, GBIO)
+julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+
+julia> fname = writevcf(genomes);
+
+julia> _, n_loci = vcfcountloci(fname);
+
+julia> entries, format_lines = vcfextractentriesandformats(fname);
+
+julia> field, n_alleles, _ = vcfextractinfo(fname, format_lines=format_lines);
+
+julia> genomes_instantiated = vcfinstantiateoutput(fname, entries=entries, n_loci=n_loci, n_alleles=n_alleles);
+
+julia> sum(ismissing.(genomes_instantiated.allele_frequencies[:, 1])) == length(entries)
+true
+
+julia> file = open(fname, "r"); line::Vector{String} = split([readline(file) for i in 1:10][end], "\t"); close(file);
+
+julia> vcfextractallelefreqs!(genomes_instantiated, nothing, [0], fname=fname, line=line, line_counter=10, field=field);
+
+julia> sum(ismissing.(genomes_instantiated.allele_frequencies[:, 1])) == 0
+true
+
+julia> rm(fname);
+```
 """
-function vcf_extract_allele_freqs!(
+function vcfextractallelefreqs!(
     genomes::Genomes,
     pb::Union{Nothing,Progress},
-    i::Int64,
+    i::Vector{Int64};
     fname::String,
-    verbose::Bool,
+    line::Vector{String},
     line_counter::Int64,
     field::String,
-    idx_field::Int64,
-    line::Vector{String},
-    chrom::String,
-    pos::Int64,
-    ref::String,
-    alt::Vector{String},
-    refalts::Vector{String},
-)::Tuple{Genomes,Union{Nothing,Progress},Int64}
+    verbose::Bool = false,
+)
+    # Parse coordinates
+    info = vcfparsecoordinates(line = line, line_counter = line_counter, field = field)
+    if isnothing(info)
+        # Skip if AF, AD, and GT fields are all empty
+        return nothing
+    end
+    idx_field = info[1]
+    chrom = info[2]
+    pos = info[3]
+    refalts = info[4]
     # Column index of the start of genotype data
     IDX::Int64 = 10
-    if field == "AF"
+    (afreqs, depths, genotype_calls, idx_missing) = if field == "AF"
         afreqs = try
             parse.(Float64, stack([split(split(x, ":")[idx_field], ",") for x in line[IDX:end]], dims = 1))
         catch
@@ -562,6 +711,7 @@ function vcf_extract_allele_freqs!(
             )
         end
         idx_missing = findall(sum(afreqs, dims = 2)[:, 1] .== 0.0)
+        (afreqs, [], [], idx_missing)
     elseif field == "AD"
         depths = try
             parse.(Float64, stack([split(split(x, ":")[idx_field], ",") for x in line[IDX:end]], dims = 1))
@@ -581,6 +731,7 @@ function vcf_extract_allele_freqs!(
             )
         end
         idx_missing = findall(sum(depths, dims = 2)[:, 1] .== 0.0)
+        ([], depths, [], idx_missing)
     elseif field == "GT"
         genotype_calls = fill(0, length(line) - 9, ploidy)
         genotype_calls_tmp::Vector{String} = repeat([""], ploidy)
@@ -592,18 +743,21 @@ function vcf_extract_allele_freqs!(
             genotype_calls[k, :] = parse.(Int64, genotype_calls_tmp)
         end
         idx_missing = findall(sum(genotype_calls, dims = 2)[:, 1] .== 0.0)
+        ([], [], genotype_calls, idx_missing)
     end
     for j in eachindex(refalts)
         # j = 2
-        # Skip the reference allele
+        # Skip the reference allele (i.e. the first allele)
         if (j == 1) && (length(refalts) > 1)
             continue
         end
         allele = refalts[j]
-        i += 1
-        genomes.loci_alleles[i] = if length(refalts) > 1
+        i[1] += 1
+        genomes.loci_alleles[i[1]] = if length(refalts) > 1
+            # Biallelic or multi-allelic instances (usual/expected case)
             join([chrom, pos, join(refalts, "|"), allele], "\t")
         else
+            # Mono-allelic instances
             join([chrom, pos, join(repeat(refalts, 2), "|"), allele], "\t")
         end
         allele_frequencies::Vector{Union{Missing,Float64}} = if field == "AF"
@@ -623,12 +777,11 @@ function vcf_extract_allele_freqs!(
             allele_frequencies[idx_missing] .= missing
         end
         # Insert allele frequencies
-        genomes.allele_frequencies[:, i] = allele_frequencies
+        genomes.allele_frequencies[:, i[1]] = allele_frequencies
         if verbose
             ProgressMeter.next!(pb)
         end
     end
-    (genomes, pb, i)
 end
 
 """
@@ -687,31 +840,27 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     if !isfile(fname)
         throw(ErrorException("The file: " * fname * " does not exist."))
     end
-    gzip = if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
-        true
-    else
-        false
-    end
     # Count the number of lines in the file which are not header lines or comments
-    total_lines, n_loci = vcf_count_loci(fname, verbose)
+    total_lines, n_loci = vcfcountloci(fname, verbose = verbose)
     # Find location of each file chunk for multi-threaded parsing
     (idx_loci_per_thread_ini, idx_loci_per_thread_fin, file_pos_per_thread_ini, file_pos_per_thread_fin) =
-        vcf_chunkify(fname, verbose, n_loci, total_lines)
+        vcfchunkify(fname, n_loci = n_loci, verbose = verbose)
     # Extract the names of the entries or samples
-    entries, format_lines = vcf_extract_entries_and_formats(fname, verbose)
+    entries, format_lines = vcfextractentriesandformats(fname, verbose = verbose)
     # Extract info
-    field, n_alleles, ploidy = vcf_extract_info(fname, verbose, field, format_lines)
+    field, n_alleles, ploidy = vcfextractinfo(fname, field = field, format_lines = format_lines, verbose = verbose)
     # Instantiate the output Genomes struct
-    genomes = vcf_instantiate_output(fname, verbose, entries, n_loci, n_alleles)
+    genomes = vcfinstantiateoutput(fname, entries = entries, n_loci = n_loci, n_alleles = n_alleles, verbose = verbose)
     n, p = size(genomes.allele_frequencies)
-    # Read the file line by line
+    # Instantiate the progress meter
     pb = if verbose
         ProgressMeter.Progress(p; desc = "Loading genotypes from vcf file: ")
     else
         nothing
     end
+    # Create a vector of open file streams, one for each thread
     files = []
-    for i in eachindex(file_pos_per_thread_ini)
+    for _ in eachindex(file_pos_per_thread_ini)
         file =
             if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
                 GZip.open(fname, "r")
@@ -723,16 +872,14 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
     thread_lock::ReentrantLock = ReentrantLock()
     Threads.@threads for idx in eachindex(file_pos_per_thread_ini)
         # for idx in eachindex(file_pos_per_thread_ini)
-        # idx = 2
+        # idx = 1
         # println(string("idx = ", idx))
-        allele_frequencies::Vector{Union{Missing,Float64}} = fill(missing, n)
         ini = file_pos_per_thread_ini[idx]
         fin = file_pos_per_thread_fin[idx]
-        line::Vector{String} = repeat([""], n + 9)
         file = files[idx]
         seek(file, ini)
-        i = idx_loci_per_thread_ini[idx]
-        line_counter = (i + (total_lines - n_loci)) - 1
+        i::Vector{Int64} = [idx_loci_per_thread_ini[idx]]
+        line_counter = (i[1] + (total_lines - n_loci)) - 1
         while (position(file) <= fin) && !eof(file)
             raw_line = readline(file)
             line_counter += 1
@@ -746,32 +893,27 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
             if raw_line[1] == '#'
                 continue
             end
-            line .= split(raw_line, "\t")
-            info = vcf_parse_coordinates(line, line_counter, field, entries)
-            if isnothing(info)
-                continue
+            line::Vector{String} = split(raw_line, "\t")
+            if (n + 9) != length(line)
+                throw(
+                    ErrorException(
+                        "The header line and line: " *
+                        string(line_counter) *
+                        " of the vcf file: '" *
+                        fname *
+                        "' do have the same number of columns.",
+                    ),
+                )
             end
-            idx_field = info[1]
-            chrom = info[2]
-            pos = info[3]
-            ref = info[4]
-            alt = info[5]
-            refalts = info[6]
-            @lock thread_lock genomes, pb, i = vcf_extract_allele_freqs!(
+            @lock thread_lock vcfextractallelefreqs!(
                 genomes,
                 pb,
                 i,
-                fname,
-                verbose,
-                line_counter,
-                field,
-                idx_field,
-                line,
-                chrom,
-                pos,
-                ref,
-                alt,
-                refalts,
+                fname = fname,
+                line = line,
+                line_counter = line_counter,
+                field = field,
+                verbose = verbose,
             )
         end
         close(file)

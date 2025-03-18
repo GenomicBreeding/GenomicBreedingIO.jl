@@ -16,6 +16,13 @@ include("vcf.jl")
 export levenshteindistance, isfuzzymatch
 export readjld2, writejld2
 export readdelimited, writedelimited
+export vcfcountloci,
+    vcfchunkify,
+    vcfextractentriesandformats,
+    vcfextractinfo,
+    vcfinstantiateoutput,
+    vcfparsecoordinates,
+    vcfextractallelefreqs!
 export readvcf, writevcf
 
 # # Precompile
