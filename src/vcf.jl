@@ -23,8 +23,8 @@ The function automatically detects and handles different file formats:
 - BGZipped VCF files (.vcf.bgz)
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
@@ -93,8 +93,8 @@ A tuple containing four Vector{Int64} arrays:
 - Handles both regular and gzipped VCF files
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
@@ -198,8 +198,8 @@ CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO, and FORMAT
 - `ArgumentError`: If VCF has fewer than expected columns or column names don't match VCF format
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
@@ -326,8 +326,8 @@ A tuple containing:
 - `ErrorException`: If unable to parse number of alleles from format header
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
@@ -460,8 +460,8 @@ Create and initialize a Genomes struct from VCF file parameters.
 - `ErrorException`: If duplicate entries are found in the VCF file
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
@@ -549,8 +549,8 @@ from a VCF file line. It handles missing alternative alleles (denoted by ".") an
 necessary type conversions.
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
@@ -644,8 +644,8 @@ Updates Genomes object with coordinates and frequencies for each allele.
 - `ErrorException`: If unable to parse AF or AD fields
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
@@ -812,8 +812,8 @@ Performs various checks on the input data including:
 - `ErrorException`: If file doesn't exist, has duplicates, or output dimensions are invalid
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
@@ -834,7 +834,7 @@ true
 ```
 """
 function readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
-    # genomes = GBCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
+    # genomes = GenomicBreedingCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
     # genomes = simulategenomes(n_alleles=3, sparsity=0.1); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
     # Check input arguments
     if !isfile(fname)
@@ -994,20 +994,20 @@ data according to VCF specifications. The output includes:
 - `ArgumentError`: If the file extension is not '.vcf' or if the specified directory doesn't exist
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes_1 = GBCore.simulategenomes(n=2, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes_1 = GenomicBreedingCore.simulategenomes(n=2, verbose=false);
 
 julia> writevcf(genomes_1, fname="test_genomes_1.vcf")
 "test_genomes_1.vcf"
 
-julia> genomes_2 = GBCore.simulategenomes(n=2, n_alleles=3, verbose=false);
+julia> genomes_2 = GenomicBreedingCore.simulategenomes(n=2, n_alleles=3, verbose=false);
 
 julia> genomes_2.allele_frequencies = round.(genomes_2.allele_frequencies .* 4) ./ 4;
 
 julia> writevcf(genomes_2, fname="test_genomes_2.vcf", ploidy=4)
 "test_genomes_2.vcf"
 
-julia> genomes_3 = GBCore.simulategenomes(n=3, verbose=false);
+julia> genomes_3 = GenomicBreedingCore.simulategenomes(n=3, verbose=false);
 
 julia> writevcf(genomes_3, fname="test_genomes_3.vcf", gzip=true)
 "test_genomes_3.vcf.gz"
@@ -1050,7 +1050,7 @@ function writevcf(
     header_lines = [
         "##fileformat=VCFv4.2",
         "##fileDate=" * Dates.format(now(), "yyyymmdd"),
-        "##source=GBIO.jl-v1.0.0-DEV",
+        "##source=GenomicBreedingIO.jl-v1.0.0-DEV",
         "##reference=unknown",
         "##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of Samples With Data\">",
         "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",

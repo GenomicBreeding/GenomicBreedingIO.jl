@@ -1,12 +1,12 @@
-using GBCore
-using GBIO
+using GenomicBreedingCore
+using GenomicBreedingIO
 using Test
 using Documenter
 
-Documenter.doctest(GBIO)
+Documenter.doctest(GenomicBreedingIO)
 
-@testset "GBIO.jl" begin
-    genomes = GBCore.simulategenomes(n = 2, verbose = false)
+@testset "GenomicBreedingIO.jl" begin
+    genomes = GenomicBreedingCore.simulategenomes(n = 2, verbose = false)
     fname = writejld2(genomes)
     @test readjld2(Genomes, fname = fname) == genomes
     phenomes = Phenomes(n = 2, t = 2)
@@ -24,7 +24,7 @@ Documenter.doctest(GBIO)
     fname = writedelimited(phenomes)
     phenomes_reloaded = readdelimited(Phenomes, fname = fname)
     @test phenomes == phenomes_reloaded
-    trials, _ = GBCore.simulatetrials(genomes = genomes, verbose = false)
+    trials, _ = GenomicBreedingCore.simulatetrials(genomes = genomes, verbose = false)
     fname = writedelimited(trials)
     trials_reloaded = readdelimited(Trials, fname = fname)
     @test trials == trials_reloaded

@@ -1,7 +1,7 @@
-name = "GBIO"
+name = "GenomicBreedingIO"
 uuid = "f6f5bf5f-7369-4de1-9a2f-51e3ce5e0754"
 authors = ["jeffersonparil@gmail.com"]
-version = "1.0.0-DEV"
+version = "0.1"
 
 [deps]
 CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
@@ -9,7 +9,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-GBCore = "50d95318-1838-4cfa-a614-3543b4bb0509"
+GenomicBreedingCore = "50d95318-1838-4cfa-a614-3543b4bb0509"
 GZip = "92fee26a-97fe-5a0c-ad85-20a5f3185b63"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
@@ -18,7 +18,7 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [sources]
-GBCore = {rev = "main", url = "https://github.com/GenomicBreeding/GBCore.jl"}
+GenomicBreedingCore = {rev = "main", url = "https://github.com/GenomicBreeding/GenomicBreedingCore.jl"}
 
 [compat]
 CodecZlib = "0.7.6"
@@ -26,7 +26,7 @@ DataFrames = "1.7.0"
 Dates = "1.11.0"
 Documenter = "1.8.0"
 FileIO = "1.16.6"
-GBCore = "1.0.0"
+GenomicBreedingCore = "1.0.0"
 GZip = "0.6.2"
 JLD2 = "0.5.10"
 MixedModels = "4.28.0"

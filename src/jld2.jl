@@ -15,8 +15,8 @@ Load a core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects
 - `DimensionMismatch`: If the loaded struct is corrupted
 
 ## Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=2, verbose=false);
 
 julia> fname = writejld2(genomes);
 
@@ -79,8 +79,8 @@ Save genomic breeding core data structures to a JLD2 file (HDF5-compatible forma
 - Existing files will not be overwritten
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO, JLD2)
-julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO, JLD2)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=2, verbose=false);
 
 julia> writejld2(genomes, fname="test_genomes.jld2")
 "test_genomes.jld2"
@@ -120,7 +120,7 @@ julia> simulated_effects_reloaded = load("test_simulated_effects.jld2");
 julia> simulated_effects_reloaded[collect(keys(simulated_effects_reloaded))[1]] == simulated_effects
 true
 
-julia> trials, _simulated_effects = GBCore.simulatetrials(genomes = GBCore.simulategenomes(n=10, verbose=false), n_years=1, n_seasons=1, n_harvests=1, n_sites=1, n_replications=10, verbose=false);
+julia> trials, _simulated_effects = GenomicBreedingCore.simulatetrials(genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false), n_years=1, n_seasons=1, n_harvests=1, n_sites=1, n_replications=10, verbose=false);
 
 julia> tebv = analyse(trials, max_levels=50, verbose=false);
 

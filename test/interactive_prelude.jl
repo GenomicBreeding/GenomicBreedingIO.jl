@@ -1,12 +1,12 @@
 using Pkg
 Pkg.activate(".")
 try
-    Pkg.add(url = "https://github.com/GenomicBreeding/GBCore.jl")
+    Pkg.add(url = "https://github.com/GenomicBreeding/GenomicBreedingCore.jl")
 catch
     nothing
 end
-using GBIO
-using GBCore
+using GenomicBreedingIO
+using GenomicBreedingCore
 using FileIO
 using JLD2, CodecZlib
 using GZip

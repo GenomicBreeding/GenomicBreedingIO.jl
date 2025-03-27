@@ -1,18 +1,18 @@
-using GBIO
+using GenomicBreedingIO
 using Documenter
 
-DocMeta.setdocmeta!(GBIO, :DocTestSetup, :(using GBIO); recursive = true)
+DocMeta.setdocmeta!(GenomicBreedingIO, :DocTestSetup, :(using GenomicBreedingIO); recursive = true)
 
 makedocs(;
-    modules = [GBIO],
+    modules = [GenomicBreedingIO],
     authors = "jeffersonparil@gmail.com",
-    sitename = "GBIO.jl",
+    sitename = "GenomicBreedingIO.jl",
     format = Documenter.HTML(;
-        canonical = "https://GenomicBreeding.github.io/GBIO.jl",
+        canonical = "https://GenomicBreeding.github.io/GenomicBreedingIO.jl",
         edit_link = "main",
         assets = String[],
     ),
     pages = ["Home" => "index.md"],
 )
 
-deploydocs(; repo = "github.com/GenomicBreeding/GBIO.jl", devbranch = "main")
+deploydocs(; repo = "github.com/GenomicBreeding/GenomicBreedingIO.jl", devbranch = "main")

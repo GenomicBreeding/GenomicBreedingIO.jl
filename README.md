@@ -1,8 +1,8 @@
-# GBIO
+# GenomicBreedingIO
 
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://genomicbreeding.github.io/GBIO.jl/stable/)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://genomicbreeding.github.io/GBIO.jl/dev/)
-[![Build Status](https://github.com/GenomicBreeding/GBIO.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/GenomicBreeding/GBIO.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://genomicbreeding.github.io/GenomicBreedingIO.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://genomicbreeding.github.io/GenomicBreedingIO.jl/dev/)
+[![Build Status](https://github.com/GenomicBreeding/GenomicBreedingIO.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/GenomicBreeding/GenomicBreedingIO.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
 Input and output library for GenomicBreeding.jl
 

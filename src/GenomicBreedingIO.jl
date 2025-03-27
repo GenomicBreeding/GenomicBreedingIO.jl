@@ -1,6 +1,6 @@
-module GBIO
+module GenomicBreedingIO
 
-using GBCore
+using GenomicBreedingCore
 using FileIO
 using JLD2, CodecZlib
 using GZip

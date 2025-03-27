@@ -39,8 +39,8 @@ The input file should be structured as follows:
 - `OverflowError`: If allele frequencies are outside [0,1] range
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> genomes.entries = [string(genomes.populations[i], "-", genomes.entries[i]) for i in eachindex(genomes.populations)];
 
@@ -71,7 +71,7 @@ function readdelimited(
     parse_populations_from_entries::Union{Nothing,Function} = nothing,
     verbose::Bool = false,
 )::Genomes
-    # type = Genomes; genomes = GBCore.simulategenomes(n=10, sparsity=0.01); fname = writedelimited(genomes); sep = "\t"; verbose = true;
+    # type = Genomes; genomes = GenomicBreedingCore.simulategenomes(n=10, sparsity=0.01); fname = writedelimited(genomes); sep = "\t"; verbose = true;
     # parse_populations_from_entries = x -> split(x, "-")[1]
     # Check input arguments
     if !isfile(fname)
@@ -349,8 +349,8 @@ The output file contains:
 - `ArgumentError`: If the file extension is invalid or the output directory doesn't exist
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=2, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=2, verbose=false);
 
 julia> writedelimited(genomes, fname="test_genomes.tsv")
 "test_genomes.tsv"
@@ -450,7 +450,7 @@ Missing values can be specified as "missing", "NA", "na", "N/A", "n/a" or empty 
 - Performs dimension checks on the loaded data
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
 julia> phenomes = Phenomes(n=10, t=3); phenomes.entries = string.("entry_", 1:10); phenomes.populations .= "pop1"; phenomes.traits = ["A", "B", "C"]; phenomes.phenotypes = rand(10,3); phenomes.phenotypes[1,1] = missing; phenomes.mask .= true;
 
 julia> fname = writedelimited(phenomes);
@@ -660,7 +660,7 @@ Supported file extensions:
 - `ArgumentError`: If the file extension is invalid or the directory doesn't exist
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
 julia> phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"];
 
 julia> writedelimited(phenomes, fname="test_phenomes.tsv")
@@ -755,10 +755,10 @@ to accommodate slight spelling variations.
 - `ArgumentError`: If required columns are missing or ambiguous
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
-julia> genomes = GBCore.simulategenomes(n=10, verbose=false);
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
+julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
-julia> trials, _ = GBCore.simulatetrials(genomes=genomes, sparsity=0.1, verbose=false);
+julia> trials, _ = GenomicBreedingCore.simulatetrials(genomes=genomes, sparsity=0.1, verbose=false);
 
 julia> fname = writedelimited(trials);
 
@@ -769,7 +769,7 @@ true
 ```
 """
 function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", verbose::Bool = false)::Trials
-    # type = Trials; genomes = GBCore.simulategenomes(n=10, verbose=false); trials, _ = GBCore.simulatetrials(genomes=genomes, verbose=false); fname = writedelimited(trials); sep = "\t"; verbose = true;
+    # type = Trials; genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false); trials, _ = GenomicBreedingCore.simulatetrials(genomes=genomes, verbose=false); fname = writedelimited(trials); sep = "\t"; verbose = true;
     # Check input arguments
     if !isfile(fname)
         throw(ErrorException("The file: " * fname * " does not exist."))
@@ -971,7 +971,7 @@ Header line is prefixed with '#' and contains column names.
 - Directory must exist if path is specified in filename
 
 # Examples
-```jldoctest; setup = :(using GBCore, GBIO)
+```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
 julia> trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.harvests = ["harvest_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"];
 
 julia> writedelimited(trials, fname="test_trials.tsv")

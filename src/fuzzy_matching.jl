@@ -14,7 +14,7 @@ The Levenshtein distance is a measure of the minimum number of single-character 
 - `Int64`: The minimum number of edits needed to transform string `a` into string `b`
 
 # Examples
-```jldoctest; setup = :(using GBIO)
+```jldoctest; setup = :(using GenomicBreedingIO)
 julia> levenshteindistance("populations", "populations")
 0
 
@@ -71,7 +71,7 @@ a fraction of the length of the shorter string.
 - `Bool`: `true` if the strings match within the threshold, `false` otherwise
 
 # Examples
-```jldoctest; setup = :(using GBIO)
+```jldoctest; setup = :(using GenomicBreedingIO)
 julia> isfuzzymatch("populations", "populations")
 true
 

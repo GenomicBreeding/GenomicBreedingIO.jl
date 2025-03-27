@@ -1,14 +1,14 @@
 ```@meta
-CurrentModule = GBIO
+CurrentModule = GenomicBreedingIO
 ```
 
-# GBIO
+# GenomicBreedingIO
 
-Documentation for [GBIO](https://github.com/jeffersonfparil/GBIO.jl).
+Documentation for [GenomicBreedingIO](https://github.com/jeffersonfparil/GenomicBreedingIO.jl).
 
 ```@index
 ```
 
 ```@autodocs
-Modules = [GBIO]
+Modules = [GenomicBreedingIO]
 ```
