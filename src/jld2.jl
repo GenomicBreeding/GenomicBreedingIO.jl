@@ -14,7 +14,7 @@ Load a core (`Genomes`, `Phenomes`, and `Trials`), simulation (`SimulatedEffects
 - `ArgumentError`: If the specified file does not exist
 - `DimensionMismatch`: If the loaded struct is corrupted
 
-## Examples
+# Examples
 ```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
 julia> genomes = GenomicBreedingCore.simulategenomes(n=2, verbose=false);
 
