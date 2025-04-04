@@ -46,7 +46,7 @@ function readjld2(type::Type{T}; fname::String)::T where {T<:AbstractGB}
     struct_name::String = collect(keys(d))[1]
     x = d[struct_name]
     if !checkdims(x)
-        throw(DimensionMismatch(struct_name * " struct from the JLD2 file: " * fname * " is corrupted."))
+        throw(DimensionMismatch(struct_name * " struct from the JLD2 file: " * fname * " is corrupted ☹."))
     end
     return x
 end
@@ -136,7 +136,7 @@ true
 function writejld2(A::AbstractGB; fname::Union{Missing,String} = missing)::String
     # Check input arguments
     if !checkdims(A)
-        throw(DimensionMismatch(string(typeof(A)) * " input is corrupted."))
+        throw(DimensionMismatch(string(typeof(A)) * " input is corrupted ☹."))
     end
     if ismissing(fname)
         fname = string("output-", string(typeof(A)), "-", Dates.format(now(), "yyyymmddHHMMSS"), ".jld2")

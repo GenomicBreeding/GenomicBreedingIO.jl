@@ -609,39 +609,44 @@ function vcfparsecoordinates(;
 end
 
 """
-    vcfextractallelefreqs!(input::Vector{Any}; fname::String, line::Vector{String}, 
-                          line_counter::Int64, field::String, verbose::Bool = false)
+    vcfextractallelefreqs!(genomes::Genomes, pb::Union{Nothing,Progress}, i::Vector{Int64}; 
+                          fname::String, line::Vector{String}, line_counter::Int64, 
+                          field::String, min_depth::Int64=10, max_depth::Int64=100, 
+                          verbose::Bool=false)
 
 Extract allele frequencies from VCF file data and update a Genomes object.
 
 # Arguments
-- `input::Vector{Any}`: Vector containing:
-  1. `genomes::Genomes`: Object to store genomic data 
-  2. `pb::Union{Nothing,Progress}`: Progress bar object or nothing
-  3. `i::Int64`: Current locus-allele index
+- `genomes::Genomes`: Object to store genomic data
+- `pb::Union{Nothing,Progress}`: Progress bar object or nothing
+- `i::Vector{Int64}`: Single-element vector containing current locus-allele index
 - `fname::String`: Name of VCF file being processed
 - `line::Vector{String}`: Current line from VCF file split into fields
 - `line_counter::Int64`: Current line number in VCF file
 - `field::String`: Type of field to extract ("AF", "AD", or "GT")
+- `min_depth::Int64=10`: Minimum read depth threshold for AD field
+- `max_depth::Int64=100`: Maximum read depth threshold for AD field
 - `verbose::Bool=false`: Whether to display progress updates
 
 # Returns
-Updates the input vector's elements in place:
-- First element (genomes): Updated with new allele frequencies
-- Second element (progress bar): Advanced if verbose=true
-- Third element (index): Incremented based on processed alleles
+Nothing; Updates the input parameters in place:
+- `genomes`: Updated with new allele frequencies and loci information
+- `pb`: Advanced if verbose=true
+- `i`: Index incremented based on processed alleles
 
 # Description
-Processes VCF data to extract allele frequencies using:
-- AF field: Direct frequency values
-- AD field: Calculated from read depths
-- GT field: Calculated from genotype calls 
+Processes VCF data to extract allele frequencies using one of three methods:
+- AF field: Direct frequency values from VCF
+- AD field: Calculated from read depths (filtered by min_depth and max_depth)
+- GT field: Calculated from genotype calls
 
-Updates Genomes object with coordinates and frequencies for each allele.
+Updates Genomes object with:
+- Loci-allele identifiers (chromosome, position, alleles)
+- Allele frequencies for each sample
 
 # Throws
-- `ArgumentError`: If input vector elements have incorrect types
-- `ErrorException`: If unable to parse AF or AD fields
+- `ArgumentError`: If field parameter is not "AF", "AD", or "GT"
+- `ErrorException`: If unable to parse AF or AD fields from VCF
 
 # Examples
 ```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
@@ -678,6 +683,8 @@ function vcfextractallelefreqs!(
     line::Vector{String},
     line_counter::Int64,
     field::String,
+    min_depth::Int64 = 10,
+    max_depth::Int64 = 100,
     verbose::Bool = false,
 )
     # Parse coordinates
@@ -730,6 +737,8 @@ function vcfextractallelefreqs!(
                 ),
             )
         end
+        # Set depth beyond the min and max depth to zero
+        depths[(depths.<min_depth).||(depths.>max_depth)] .= 0.0
         idx_missing = findall(sum(depths, dims = 2)[:, 1] .== 0.0)
         ([], depths, [], idx_missing)
     elseif field == "GT"
@@ -785,13 +794,15 @@ function vcfextractallelefreqs!(
 end
 
 """
-    readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
+    readvcf(; fname::String, field::String = "any", min_depth::Int64 = 5, max_depth::Int64 = 100, verbose::Bool = false)::Genomes
 
 Read genetic data from a VCF (Variant Call Format) file into a Genomes struct.
 
 # Arguments
 - `fname::String`: Path to the VCF file. Can be gzipped (.vcf.gz or .vcf.bgz) or uncompressed (.vcf)
 - `field::String="any"`: Which FORMAT field to extract from VCF. Default "any" tries to automatically detect genotype field
+- `min_depth::Int64=5`: Minimum read depth threshold for AD (Allele Depth) field
+- `max_depth::Int64=100`: Maximum read depth threshold for AD field
 - `verbose::Bool=false`: Whether to print progress and debug information
 
 # Returns
@@ -803,6 +814,11 @@ Read genetic data from a VCF (Variant Call Format) file into a Genomes struct.
 
 # Details
 Reads VCF files in parallel using multiple threads. Handles multi-allelic variants and different ploidies. 
+Field priority (when field="any"):
+1. AF (Allele Frequency)  
+2. AD (Allele Depth)  
+3. GT (Genotype)
+
 Performs various checks on the input data including:
 - File existence
 - No duplicate loci-allele combinations 
@@ -833,8 +849,13 @@ julia> ismissing.(genomes.allele_frequencies) == ismissing.(genomes_reloaded.all
 true
 ```
 """
-function readvcf(; fname::String, field::String = "any", verbose::Bool = false)::Genomes
-    # genomes = GenomicBreedingCore.simulategenomes(n=10, sparsity=0.1); fname = writevcf(genomes, gzip=true); field = "any"; verbose = true;
+function readvcf(;
+    fname::String,
+    field::String = "any",
+    min_depth::Int64 = 10,
+    max_depth::Int64 = 100,
+    verbose::Bool = false,
+)::Genomes
     # genomes = simulategenomes(n_alleles=3, sparsity=0.1); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = writevcf(genomes, ploidy=4); field = "GT"; verbose = true;
     # Check input arguments
     if !isfile(fname)
@@ -913,6 +934,8 @@ function readvcf(; fname::String, field::String = "any", verbose::Bool = false):
                 line = line,
                 line_counter = line_counter,
                 field = field,
+                min_depth = min_depth,
+                max_depth = max_depth,
                 verbose = verbose,
             )
         end
@@ -1026,7 +1049,7 @@ function writevcf(
     # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 4) ./ 4; fname = missing; ploidy = 4; max_depth = 100; n_decimal_places = 4; gzip = true;
     # Check input arguments
     if !checkdims(genomes)
-        throw(DimensionMismatch("Genomes input is corrupted."))
+        throw(DimensionMismatch("Genomes input is corrupted ☹."))
     end
     if ismissing(fname)
         fname = string("output-Genomes-", Dates.format(now(), "yyyymmddHHMMSS"), ".vcf")

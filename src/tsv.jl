@@ -365,7 +365,7 @@ function writedelimited(
     # genomes = Genomes(n=2,p=4); genomes.entries = ["entry_1", "entry_2"]; genomes.loci_alleles = ["locus_1", "locus_2", "locus_3", "locus_4"]; sep::String = "\t"; fname = missing; include_population_header = true;
     # Check input arguments
     if !checkdims(genomes)
-        throw(DimensionMismatch("Genomes input is corrupted."))
+        throw(DimensionMismatch("Genomes input is corrupted ☹."))
     end
     if ismissing(fname)
         if sep == "\t"
@@ -671,7 +671,7 @@ function writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missi
     # phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing;
     # Check input arguments
     if !checkdims(phenomes)
-        throw(DimensionMismatch("Phenomes input is corrupted."))
+        throw(DimensionMismatch("Phenomes input is corrupted ☹."))
     end
     if ismissing(fname)
         if sep == "\t"
@@ -982,7 +982,7 @@ function writedelimited(trials::Trials; fname::Union{Missing,String} = missing, 
     # trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.harvests = ["harvest_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing;
     # Check input arguments
     if !checkdims(trials)
-        throw(DimensionMismatch("Trials input is corrupted."))
+        throw(DimensionMismatch("Trials input is corrupted ☹."))
     end
     if ismissing(fname)
         if sep == "\t"
