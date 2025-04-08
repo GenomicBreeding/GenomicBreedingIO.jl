@@ -1,5 +1,5 @@
 """
-    vcfcountloci(fname::String; verbose::Bool = false)::Tuple{Int64,Int64}
+    vcfcountlocialleles(fname::String; verbose::Bool = false)::Tuple{Int64,Int64}
 
 Count the number of loci and total lines in a VCF file.
 
@@ -30,9 +30,9 @@ julia> fname = writevcf(genomes);
 
 julia> fname_gz = writevcf(genomes, gzip=true);
 
-julia> n_1, p_1 = vcfcountloci(fname);
+julia> n_1, p_1, l_1 = vcfcountlocialleles(fname);
 
-julia> n_2, p_2 = vcfcountloci(fname_gz);
+julia> n_2, p_2, l_2 = vcfcountlocialleles(fname_gz);
 
 julia> n_1 == n_2 == 10_009
 true
@@ -40,14 +40,18 @@ true
 julia> p_1 == p_2 == 10_000
 true
 
+julia> l_1 == l_2 == 10_000
+true
+
 julia> rm.([fname, fname_gz]);
 ```
 """
-function vcfcountloci(fname::String; verbose::Bool = false)::Tuple{Int64,Int64}
+function vcfcountlocialleles(fname::String; verbose::Bool = false)::Tuple{Int64,Int64,Int64}
     if verbose
         println("Counting loci...")
     end
     n_loci::Int64 = 0
+    n_alt_alleles::Int64 = 0
     total_lines::Int64 = 0
     file = if (split(fname, ".")[(end-1):end] == ["vcf", "gz"]) || (split(fname, ".")[(end-1):end] == ["vcf", "bgz"])
         GZip.open(fname, "r")
@@ -59,6 +63,7 @@ function vcfcountloci(fname::String; verbose::Bool = false)::Tuple{Int64,Int64}
         total_lines += 1
         if (raw_line[1] != '#') && (length(raw_line) > 0)
             n_loci += 1
+            n_alt_alleles += length(split(split(raw_line, "\t")[5], ",")) # alt alleles
         end
     end
     close(file)
@@ -66,7 +71,7 @@ function vcfcountloci(fname::String; verbose::Bool = false)::Tuple{Int64,Int64}
         println(string("Total number of lines: ", total_lines))
         println(string("Total number of loci: ", n_loci))
     end
-    total_lines, n_loci
+    total_lines, n_loci, n_alt_alleles
 end
 
 """
@@ -98,7 +103,7 @@ julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
-julia> _, n_loci = vcfcountloci(fname);
+julia> _, n_loci, n_alt_alleles = vcfcountlocialleles(fname);
 
 julia> idx_loci_per_thread_ini, idx_loci_per_thread_fin, file_pos_per_thread_ini, file_pos_per_thread_fin = vcfchunkify(fname, n_loci=n_loci);
 
@@ -467,11 +472,9 @@ julia> fname = writevcf(genomes);
 
 julia> entries, format_lines = vcfextractentriesandformats(fname);
 
-julia> _, n_loci = vcfcountloci(fname);
+julia> _, _, n_alt_alleles = vcfcountlocialleles(fname);
 
-julia> _, n_alleles, _ = vcfextractinfo(fname, format_lines=format_lines);
-
-julia> genomes_instantiated = vcfinstantiateoutput(fname, entries=entries, n_loci=n_loci, n_alleles=n_alleles);
+julia> genomes_instantiated = vcfinstantiateoutput(fname, entries=entries, n_alt_alleles=n_alt_alleles);
 
 julia> size(genomes_instantiated.allele_frequencies)
 (10, 10000)
@@ -485,8 +488,7 @@ julia> rm(fname);
 function vcfinstantiateoutput(
     fname::String;
     entries::Vector{String},
-    n_loci::Int64,
-    n_alleles::Int64,
+    n_alt_alleles::Int64,
     verbose::Bool = false,
 )::Genomes
     # Define the expected dimensions of the Genomes struct
@@ -494,7 +496,7 @@ function vcfinstantiateoutput(
         println("Initialising the output Genomes struct...")
     end
     n = length(entries)
-    p = n_loci * (n_alleles - 1)
+    p = n_alt_alleles # equivalent to n_loci * (n_alleles - 1) if n_alleles are the same across all loci
     # Instantiate the output struct
     genomes = Genomes(n = n, p = p)
     genomes.entries = entries
@@ -654,13 +656,13 @@ julia> genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false);
 
 julia> fname = writevcf(genomes);
 
-julia> _, n_loci = vcfcountloci(fname);
+julia> _, _, n_alt_alleles = vcfcountlocialleles(fname);
 
 julia> entries, format_lines = vcfextractentriesandformats(fname);
 
 julia> field, n_alleles, _ = vcfextractinfo(fname, format_lines=format_lines);
 
-julia> genomes_instantiated = vcfinstantiateoutput(fname, entries=entries, n_loci=n_loci, n_alleles=n_alleles);
+julia> genomes_instantiated = vcfinstantiateoutput(fname, entries=entries, n_alt_alleles=n_alt_alleles);
 
 julia> sum(ismissing.(genomes_instantiated.allele_frequencies[:, 1])) == length(entries)
 true
@@ -738,7 +740,7 @@ function vcfextractallelefreqs!(
             )
         end
         # Set depth beyond the min and max depth to zero
-        depths[(depths.<min_depth).||(depths.>max_depth)] .= 0.0
+        depths[(depths .< min_depth).||(depths .> max_depth)] .= 0.0
         idx_missing = findall(sum(depths, dims = 2)[:, 1] .== 0.0)
         ([], depths, [], idx_missing)
     elseif field == "GT"
@@ -862,7 +864,7 @@ function readvcf(;
         throw(ErrorException("The file: " * fname * " does not exist."))
     end
     # Count the number of lines in the file which are not header lines or comments
-    total_lines, n_loci = vcfcountloci(fname, verbose = verbose)
+    total_lines, n_loci, n_alt_alleles = vcfcountlocialleles(fname, verbose = verbose)
     # Find location of each file chunk for multi-threaded parsing
     (idx_loci_per_thread_ini, idx_loci_per_thread_fin, file_pos_per_thread_ini, file_pos_per_thread_fin) =
         vcfchunkify(fname, n_loci = n_loci, verbose = verbose)
@@ -871,7 +873,7 @@ function readvcf(;
     # Extract info
     field, n_alleles, ploidy = vcfextractinfo(fname, field = field, format_lines = format_lines, verbose = verbose)
     # Instantiate the output Genomes struct
-    genomes = vcfinstantiateoutput(fname, entries = entries, n_loci = n_loci, n_alleles = n_alleles, verbose = verbose)
+    genomes = vcfinstantiateoutput(fname, entries = entries, n_alt_alleles = n_alt_alleles, verbose = verbose)
     n, p = size(genomes.allele_frequencies)
     # Instantiate the progress meter
     pb = if verbose
@@ -1145,7 +1147,7 @@ function writevcf(
         gt_ad_af = repeat([""], length(genomes.entries))
         for j in eachindex(gt_ad_af)
             g = gt_tmp[j, :]
-            g = g[g.!=""]
+            g = g[g .!= ""]
             g = replace.(g, ref => "0")
             for k in eachindex(alt)
                 g = replace.(g, alt[k] => string(k))
