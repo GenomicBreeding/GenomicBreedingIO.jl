@@ -434,7 +434,7 @@ function vcfextractinfo(
         end
         if verbose
             println("Field identified: " * field)
-            println(string("Number of alleles per locus: ", n_alleles))
+            println(string("Number of alleles per locus according to FORMAT lines (fret not though as number of alleles is counted per locus and may not correspond to this): ", n_alleles))
         end
         n_alleles, typemax(Int64)
     end
@@ -443,21 +443,20 @@ function vcfextractinfo(
 end
 
 """
-    vcfinstantiateoutput(fname::String; entries::Vector{String}, n_loci::Int64, n_alleles::Int64, verbose::Bool = false)::Genomes
+    vcfinstantiateoutput(fname::String; entries::Vector{String}, n_alt_alleles::Int64, verbose::Bool = false)::Genomes
 
 Create and initialize a Genomes struct from VCF file parameters.
 
 # Arguments
 - `fname::String`: Name of the VCF file being processed
 - `entries::Vector{String}`: Vector containing entry identifiers
-- `n_loci::Int64`: Number of loci in the VCF file
-- `n_alleles::Int64`: Number of alleles per locus
+- `n_alt_alleles::Int64`: Total number of alternative alleles across all loci
 - `verbose::Bool=false`: If true, prints progress information
 
 # Returns
 - `Genomes`: An initialized Genomes struct with:
-  - dimensions n × p where n is number of entries and p = n_loci * (n_alleles - 1)
-  - entry names assigned
+  - dimensions n × p where n is number of entries and p = n_alt_alleles
+  - entry names assigned from input entries
   - populations set to "unknown"
   - mask set to true
   
