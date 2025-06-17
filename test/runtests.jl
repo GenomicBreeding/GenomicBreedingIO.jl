@@ -35,6 +35,6 @@ Documenter.doctest(GenomicBreedingIO)
 end
 
 # Clean-up
-for f in readdir()[match.(r"^output-", readdir()) .!= nothing]
+for f in readdir()[match.(r"^output-", readdir()).!=nothing]
     rm(f)
 end

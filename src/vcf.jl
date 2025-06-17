@@ -434,7 +434,12 @@ function vcfextractinfo(
         end
         if verbose
             println("Field identified: " * field)
-            println(string("Number of alleles per locus according to FORMAT lines (fret not though as number of alleles is counted per locus and may not correspond to this): ", n_alleles))
+            println(
+                string(
+                    "Number of alleles per locus according to FORMAT lines (fret not though as number of alleles is counted per locus and may not correspond to this): ",
+                    n_alleles,
+                ),
+            )
         end
         n_alleles, typemax(Int64)
     end
@@ -702,7 +707,13 @@ function vcfextractallelefreqs!(
     IDX::Int64 = 10
     (afreqs, depths, genotype_calls, idx_missing) = if field == "AF"
         afreqs = try
-            parse.(Float64, stack([split(split(x, ":")[idx_field], ",") for x in line[IDX:end]], dims = 1))
+            parse.(
+                Float64,
+                stack(
+                    [[af == "." ? "0.0" : af for af in split(split(x, ":")[idx_field], ",")] for x in line[IDX:end]],
+                    dims = 1,
+                ),
+            )
         catch
             throw(
                 ErrorException(
@@ -722,7 +733,13 @@ function vcfextractallelefreqs!(
         (afreqs, [], [], idx_missing)
     elseif field == "AD"
         depths = try
-            parse.(Float64, stack([split(split(x, ":")[idx_field], ",") for x in line[IDX:end]], dims = 1))
+            parse.(
+                Float64,
+                stack(
+                    [[ad == "." ? "0" : ad for ad in split(split(x, ":")[idx_field], ",")] for x in line[IDX:end]],
+                    dims = 1,
+                ),
+            )
         catch
             throw(
                 ErrorException(
@@ -739,7 +756,7 @@ function vcfextractallelefreqs!(
             )
         end
         # Set depth beyond the min and max depth to zero
-        depths[(depths .< min_depth).||(depths .> max_depth)] .= 0.0
+        depths[(depths.<min_depth).||(depths.>max_depth)] .= 0.0
         idx_missing = findall(sum(depths, dims = 2)[:, 1] .== 0.0)
         ([], depths, [], idx_missing)
     elseif field == "GT"
@@ -916,6 +933,7 @@ function readvcf(;
                 continue
             end
             line::Vector{String} = split(raw_line, "\t")
+            # println(line)
             if (n + 9) != length(line)
                 throw(
                     ErrorException(
@@ -1146,7 +1164,7 @@ function writevcf(
         gt_ad_af = repeat([""], length(genomes.entries))
         for j in eachindex(gt_ad_af)
             g = gt_tmp[j, :]
-            g = g[g .!= ""]
+            g = g[g.!=""]
             g = replace.(g, ref => "0")
             for k in eachindex(alt)
                 g = replace.(g, alt[k] => string(k))
