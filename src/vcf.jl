@@ -732,14 +732,16 @@ function vcfextractallelefreqs!(
         idx_missing = findall(sum(afreqs, dims = 2)[:, 1] .== 0.0)
         (afreqs, [], [], idx_missing)
     elseif field == "AD"
+        # Parse allele depths (AD field) from the VCF file
         depths = try
-            parse.(
-                Float64,
-                stack(
-                    [[ad == "." ? "0" : ad for ad in split(split(x, ":")[idx_field], ",")] for x in line[IDX:end]],
-                    dims = 1,
-                ),
-            )
+            # Extract AD field values for each sample, replacing missing values (".") with "0"
+            ads = [[ad == "." ? "0" : string(ad) for ad in split(split(x, ":")[idx_field], ",")] for x in line[IDX:end]]
+            # Determine the maximum number of alleles across all samples
+            a_max = maximum([length(x) for x in ads])
+            # Pad allele depth arrays with zeros to ensure consistent dimensions across samples
+            ads = [length(x) < a_max ? vcat(x, repeat(["0"], a_max - length(x))) : x for x in ads]
+            # Convert allele depth strings to Float64 and stack them into a matrix
+            parse.(Float64, stack(ads, dims = 1))
         catch
             throw(
                 ErrorException(
