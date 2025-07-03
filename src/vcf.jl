@@ -641,7 +641,7 @@ Nothing; Updates the input parameters in place:
 - `i`: Index incremented based on processed alleles
 
 # Description
-Processes VCF data to extract allele frequencies using one of three methods:
+Processes VCF data to extract allele frequencies of the alternative allele/s using one of three methods:
 - AF field: Direct frequency values from VCF
 - AD field: Calculated from read depths (filtered by min_depth and max_depth)
 - GT field: Calculated from genotype calls

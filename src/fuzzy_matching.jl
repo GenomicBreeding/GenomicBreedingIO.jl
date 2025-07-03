@@ -60,7 +60,8 @@ Determines if two strings approximately match each other using Levenshtein dista
 
 The function compares two strings and returns `true` if they are considered similar enough
 based on the Levenshtein edit distance and a threshold value. The threshold is applied as
-a fraction of the length of the shorter string.
+a fraction of the length of the shorter string. Additionally, the function normalizes specific
+string inputs (e.g., `"#chr"` is replaced with `"chrom"`) before comparison.
 
 # Arguments
 - `a::String`: First string to compare
@@ -84,6 +85,16 @@ false
 """
 function isfuzzymatch(a::String, b::String; threshold::Float64 = 0.3)::Bool
     # a = "populations"; b = "populatins"; threshold = 0.3;
+    a = if (a == "#chr")
+        "chrom"
+    else
+        a
+    end
+    b = if (b == "#chr")
+        "chrom"
+    else
+        b
+    end
     n::Int64 = length(a)
     m::Int64 = length(b)
     dist::Int64 = levenshteindistance(a, b)

@@ -4,16 +4,18 @@
         fname::String,
         sep::String = "\\t",
         parse_populations_from_entries::Union{Nothing,Function} = nothing,
+        all_alleles_column::Bool = true,
         verbose::Bool = false
     )::Genomes
 
 Load genotype data from a delimited text file into a `Genomes` struct.
 
 # Arguments
-- `type::Type{Genomes}`: Type parameter (always `Genomes`)
+- `type::Type{Genomes}`: Type parameter (always `Genomes`) 
 - `fname::String`: Path to the input file
 - `sep::String`: Delimiter character (default: tab)
-- `parse_populations_from_entries::Union{Nothing,Function}`: Optional function to extract population names from entry names
+- `parse_populations_from_entries::Union{Nothing,Function}`: Optional function to extract population names from entry names 
+- `all_alleles_column::Bool`: Whether input file contains all alleles column (default: true)
 - `verbose::Bool`: Whether to show progress bar during loading
 
 # File Format
@@ -21,12 +23,14 @@ The input file should be structured as follows:
 - Supported extensions: .tsv, .csv, or .txt
 - Comments and headers start with '#'
 - Header format (2 lines where the second line is optional):
-    1. Column names: "chrom,pos,all_alleles,allele,entry_1,entry_2,..."
-    2. Population names (optional): "chrom,pos,all_alleles,allele,pop_1,pop_2,..."
+    1. Column names: 
+       - With all_alleles: "chrom,pos,all_alleles,allele,entry_1,entry_2,..."
+       - Without all_alleles: "chrom,pos,allele,entry_1,entry_2,..."
+    2. Population names (optional): Same format as line 1 but with population names
 - Data columns:
     1. chromosome identifier
     2. position (integer)
-    3. all alleles at locus (delimited by '|')
+    3. all alleles at locus (if all_alleles=true)
     4. specific allele
     5+. allele frequencies for each entry (0.0-1.0 or missing/NA)
 
@@ -69,10 +73,11 @@ function readdelimited(
     fname::String,
     sep::String = "\t",
     parse_populations_from_entries::Union{Nothing,Function} = nothing,
+    all_alleles_column::Bool = true,
     verbose::Bool = false,
 )::Genomes
     # type = Genomes; genomes = GenomicBreedingCore.simulategenomes(n=10, sparsity=0.01); fname = writedelimited(genomes); sep = "\t"; verbose = true;
-    # parse_populations_from_entries = x -> split(x, "-")[1]
+    # parse_populations_from_entries = x -> split(x, "-")[1]; all_alleles_column::Bool = true;
     # Check input arguments
     if !isfile(fname)
         throw(ErrorException("The file: " * fname * " does not exist."))
@@ -94,10 +99,13 @@ function readdelimited(
     header_1::Vector{String} = split(readline(file), sep)
     header_2::Vector{String} = split(readline(file), sep)
     close(file)
-    # Column index of the start of numeric values
-    IDX::Int64 = 5
+    # Column index of the start of numeric values and expected column names before entry names
+    IDX, expected_colnames = if all_alleles_column
+        5, ["chrom", "pos", "all_alleles", "allele"]
+    else
+        4, ["chrom", "pos", "allele"]
+    end
     # Expected header/column names
-    expected_colnames = ["chrom", "pos", "all_alleles", "allele"]
     if length(header_1) < IDX
         throw(
             ArgumentError(
@@ -121,13 +129,13 @@ function readdelimited(
             ),
         )
     end
-    # If only one header exits, i.e. the header with entriy names and the population names are missing
-    with_header_2::Bool = (header_1[1:4] == header_2[1:4])
+    # If only one header exits, i.e. the header with entry names and the population names are missing
+    with_header_2::Bool = (header_1[1:(IDX-1)] == header_2[1:(IDX-1)])
     header_2 = if with_header_2
         header_2
     else
         population_names = if isnothing(parse_populations_from_entries)
-            repeat(["Unknown_population"], length(header_1) - 4)
+            repeat(["Unknown_population"], length(header_1) - (IDX - 1))
         else
             try
                 parse_populations_from_entries.(header_1[IDX:end])
@@ -139,7 +147,7 @@ function readdelimited(
                 )
             end
         end
-        vcat(header_1[1:4], population_names)
+        vcat(header_1[1:(IDX-1)], population_names)
     end
     if (length(header_1) != length(header_2))
         throw(ErrorException("The 2 header lines in the genomes file: '" * fname * "' do not match."))
@@ -183,6 +191,7 @@ function readdelimited(
     end
     line::Vector{String} = repeat([""], length(header_1))
     for raw_line in eachline(file)
+        # raw_line = readline(file)
         # println(string("i=", i, "; line_counter=", line_counter))
         line .= split(raw_line, sep)
         line_counter += 1
@@ -220,8 +229,11 @@ function readdelimited(
                     ),
                 )
             end
-            refalts = line[3]
-            allele = line[4]
+            refalts, allele = if all_alleles_column
+                (line[IDX-2], line[IDX-1])
+            else
+                (string("U|", line[IDX-1]), line[IDX-1])
+            end
             genomes.loci_alleles[i] = join([chrom, pos, refalts, allele], "\t")
             # Catch missing allele frequencies and convert to -999 for parsing
             bool_missing =
