@@ -1064,6 +1064,8 @@ function writevcf(
     max_depth::Int64 = 100,
     n_decimal_places::Int64 = 4,
     gzip::Bool = false,
+    overwrite::Bool = false,
+    verbose::Bool = false,
 )::String
     # genomes = simulategenomes(n_alleles=3, sparsity=0.10); fname = missing; ploidy = 0; max_depth = 100; n_decimal_places = 4; gzip = true;
     # genomes = simulategenomes(n_alleles=3); genomes.allele_frequencies = round.(genomes.allele_frequencies .* 2) ./ 2; fname = missing; ploidy = 2; max_depth = 100; n_decimal_places = 4; gzip = true;
@@ -1076,7 +1078,11 @@ function writevcf(
         fname = string("output-Genomes-", Dates.format(now(), "yyyymmddHHMMSS"), ".vcf")
     else
         if isfile(fname)
-            throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            if overwrite
+                rm(fname)
+            else
+                throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            end
         end
         if split(basename(fname), ".")[end] != "vcf"
             throw(ArgumentError("The extension name should be either `vcf`."))
@@ -1121,6 +1127,9 @@ function writevcf(
     # Rest of the data
     locus_allele_id::Vector{String} = repeat([""], 4)
     line::Vector{String} = repeat([""], length(genomes.entries) + 9)
+    if verbose
+        pb = ProgressMeter.Progress(length(loci_ini_idx); desc = "Writing VCF file: ")
+    end
     for i in eachindex(loci_ini_idx)
         # i = 2
         ini = loci_ini_idx[i]
@@ -1190,7 +1199,13 @@ function writevcf(
         else
             write(file, join(line, "\t"))
         end
+        if verbose
+            ProgressMeter.next!(pb)
+        end
     end
     close(file)
+    if verbose
+        ProgressMeter.finish!(pb)
+    end
     return fname
 end

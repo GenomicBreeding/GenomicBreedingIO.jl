@@ -941,7 +941,8 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
 end
 
 """
-    writedelimited(trials::Trials; fname::Union{Missing,String} = missing, sep::String = "\t")::String
+    writedelimited(trials::Trials; fname::Union{Missing,String} = missing, sep::String = "\t", 
+                  overwrite::Bool = false, verbose::Bool = false)::String
 
 Write a `Trials` struct to a delimited text file, returning the filename.
 
@@ -949,6 +950,8 @@ Write a `Trials` struct to a delimited text file, returning the filename.
 - `trials::Trials`: The trials data structure to be written
 - `fname::Union{Missing,String} = missing`: Output filename. If missing, generates automatic filename with timestamp
 - `sep::String = "\t"`: Delimiter character between fields
+- `overwrite::Bool = false`: Whether to overwrite existing output file if it exists
+- `verbose::Bool = false`: Whether to show progress bar during writing
 
 # Returns
 - `String`: The name of the file that was written
@@ -959,11 +962,11 @@ Header line is prefixed with '#' and contains column names.
 
 ## Fixed Columns (1-10)
 1. years
-2. seasons
+2. seasons  
 3. harvests
 4. sites
 5. entries
-6. populations
+6. populations 
 7. replications
 8. blocks
 9. rows
@@ -977,9 +980,9 @@ Header line is prefixed with '#' and contains column names.
 - Supported file extensions: `.tsv`, `.csv`, or `.txt`
 - File extension is automatically determined based on separator if filename is missing:
   * `\\t` → `.tsv`
-  * `,` or `;` → `.csv`
+  * `,` or `;` → `.csv` 
   * other → `.txt`
-- Will not overwrite existing files
+- Will throw error if file exists and overwrite=false
 - Directory must exist if path is specified in filename
 
 # Examples
@@ -990,7 +993,13 @@ julia> writedelimited(trials, fname="test_trials.tsv")
 "test_trials.tsv"
 ```
 """
-function writedelimited(trials::Trials; fname::Union{Missing,String} = missing, sep::String = "\t")::String
+function writedelimited(
+    trials::Trials;
+    fname::Union{Missing,String} = missing,
+    sep::String = "\t",
+    overwrite::Bool = false,
+    verbose::Bool = false,
+)::String
     # trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.harvests = ["harvest_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing;
     # Check input arguments
     if !checkdims(trials)
@@ -1006,7 +1015,11 @@ function writedelimited(trials::Trials; fname::Union{Missing,String} = missing, 
         end
     else
         if isfile(fname)
-            throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            if overwrite
+                rm(fname)
+            else
+                throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            end
         end
         if (split(basename(fname), ".")[end] != "tsv") &&
            (split(basename(fname), ".")[end] != "csv") &&
@@ -1038,6 +1051,9 @@ function writedelimited(trials::Trials; fname::Union{Missing,String} = missing, 
         header[end] *= "\n"
         write(file, join(header, sep))
         # Rest of the data
+        if verbose
+            pb = ProgressMeter.Progress(length(trials.entries); desc = "Writing trials file: ")
+        end
         for i in eachindex(trials.entries)
             line::Vector{String} = [
                 trials.years[i],
@@ -1054,6 +1070,12 @@ function writedelimited(trials::Trials; fname::Union{Missing,String} = missing, 
             append!(line, [ismissing(x) ? "NA" : string(x) for x in trials.phenotypes[i, :]])
             line[end] *= "\n"
             write(file, join(line, sep))
+            if verbose
+                ProgressMeter.next!(pb)
+            end
+        end
+        if verbose
+            ProgressMeter.finish!(pb)
         end
     end
     return fname

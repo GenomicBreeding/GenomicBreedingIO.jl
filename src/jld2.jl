@@ -52,13 +52,14 @@ function readjld2(type::Type{T}; fname::String)::T where {T<:AbstractGB}
 end
 
 """
-    writejld2(A::Union{Genomes,Phenomes,Trials,SimulatedEffects,TEBV}; fname::Union{Missing,String} = missing)::String
+    writejld2(A::Union{Genomes,Phenomes,Trials,SimulatedEffects,TEBV}; fname::Union{Missing,String} = missing, overwrite::Bool=false)::String
 
 Save genomic breeding core data structures to a JLD2 file (HDF5-compatible format).
 
 # Arguments
 - `A`: A genomic breeding data structure (Genomes, Phenomes, Trials, SimulatedEffects, or TEBV)
 - `fname`: Optional. Output filename. If missing, generates an automatic name with timestamp
+- `overwrite`: Optional. If true, overwrites existing file with same name. Default is false
 
 # Returns
 - `String`: Path to the saved JLD2 file
@@ -69,14 +70,13 @@ Save genomic breeding core data structures to a JLD2 file (HDF5-compatible forma
 
 # Throws
 - `DimensionMismatch`: If input structure has invalid dimensions
-- `ErrorException`: If output file already exists
+- `ErrorException`: If output file already exists and overwrite=false
 - `ArgumentError`: If invalid file extension or directory path
 
 # Notes
 - Files are saved with compression enabled
 - Data is stored as a Dictionary with single key-value pair
 - Key is the string representation of the input type
-- Existing files will not be overwritten
 
 # Examples
 ```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO, JLD2)
@@ -133,7 +133,7 @@ julia> tebv_reloaded[collect(keys(tebv_reloaded))[1]] == tebv
 true
 ```
 """
-function writejld2(A::AbstractGB; fname::Union{Missing,String} = missing)::String
+function writejld2(A::AbstractGB; fname::Union{Missing,String} = missing, overwrite::Bool = false)::String
     # Check input arguments
     if !checkdims(A)
         throw(DimensionMismatch(string(typeof(A)) * " input is corrupted ☹."))
@@ -142,7 +142,11 @@ function writejld2(A::AbstractGB; fname::Union{Missing,String} = missing)::Strin
         fname = string("output-", string(typeof(A)), "-", Dates.format(now(), "yyyymmddHHMMSS"), ".jld2")
     else
         if isfile(fname)
-            throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            if overwrite
+                rm(fname)
+            else
+                throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            end
         end
         if split(basename(fname), ".")[end] != "jld2"
             throw(ArgumentError("The extension name should be `jld2`."))
