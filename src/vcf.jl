@@ -922,7 +922,7 @@ function readvcf(;
         i::Vector{Int64} = [idx_loci_per_thread_ini[idx]]
         line_counter = (i[1] + (total_lines - n_loci)) - 1
         while (position(file) <= fin) && !eof(file)
-            raw_line = readline(file)
+            raw_line = chomp(readline(file))
             line_counter += 1
             # If we somehow end the end of the file or encounter an empty line
             if (length(raw_line) == 0) && (position(file) == fin)
