@@ -334,6 +334,7 @@ Write genomic data to a delimited text file.
 - `fname::Union{Missing,String}`: Output filename. If missing, generates an automatic filename with timestamp
 - `sep::String`: Delimiter character for the output file (default: tab)
 - `include_population_header::Bool`: Whether to include population information in the header (default: true)
+- `overwrite`: Optional. If true, overwrites existing file with same name. Default is false
 
 # Returns
 - `String`: Path to the created output file
@@ -373,8 +374,9 @@ function writedelimited(
     fname::Union{Missing,String} = missing,
     sep::String = "\t",
     include_population_header::Bool = true,
+    overwrite::Bool = false,
 )::String
-    # genomes = Genomes(n=2,p=4); genomes.entries = ["entry_1", "entry_2"]; genomes.loci_alleles = ["locus_1", "locus_2", "locus_3", "locus_4"]; sep::String = "\t"; fname = missing; include_population_header = true;
+    # genomes = Genomes(n=2,p=4); genomes.entries = ["entry_1", "entry_2"]; genomes.loci_alleles = ["locus_1", "locus_2", "locus_3", "locus_4"]; sep::String = "\t"; fname = missing; include_population_header = true; overwrite = false
     # Check input arguments
     if !checkdims(genomes)
         throw(DimensionMismatch("Genomes input is corrupted ☹."))
@@ -389,7 +391,11 @@ function writedelimited(
         end
     else
         if isfile(fname)
-            throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            if overwrite
+                rm(fname)
+            else
+                throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            end
         end
         if (split(basename(fname), ".")[end] != "tsv") &&
            (split(basename(fname), ".")[end] != "csv") &&
@@ -649,6 +655,7 @@ Write phenotypic data from a `Phenomes` struct to a delimited text file.
 - `phenomes::Phenomes`: A Phenomes struct containing phenotypic data
 - `fname::Union{Missing,String} = missing`: Output filename. If missing, generates an automatic filename with timestamp
 - `sep::String = "\t"`: Delimiter character for the output file
+- `overwrite`: Optional. If true, overwrites existing file with same name. Default is false
 
 # Returns
 - `String`: The name of the created file
@@ -679,8 +686,13 @@ julia> writedelimited(phenomes, fname="test_phenomes.tsv")
 "test_phenomes.tsv"
 ```
 """
-function writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missing, sep::String = "\t")::String
-    # phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing;
+function writedelimited(
+    phenomes::Phenomes;
+    fname::Union{Missing,String} = missing,
+    sep::String = "\t",
+    overwrite::Bool = false,
+)::String
+    # phenomes = Phenomes(n=2, t=2); phenomes.entries = ["entry_1", "entry_2"]; phenomes.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing; overwrite = false
     # Check input arguments
     if !checkdims(phenomes)
         throw(DimensionMismatch("Phenomes input is corrupted ☹."))
@@ -695,7 +707,11 @@ function writedelimited(phenomes::Phenomes; fname::Union{Missing,String} = missi
         end
     else
         if isfile(fname)
-            throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            if overwrite
+                rm(fname)
+            else
+                throw(ErrorException("The file: " * fname * " exists. Please remove or rename the output file."))
+            end
         end
         if (split(basename(fname), ".")[end] != "tsv") &&
            (split(basename(fname), ".")[end] != "csv") &&

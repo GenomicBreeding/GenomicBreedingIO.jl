@@ -758,7 +758,7 @@ function vcfextractallelefreqs!(
             )
         end
         # Set depth beyond the min and max depth to zero
-        depths[(depths.<min_depth).||(depths.>max_depth)] .= 0.0
+        depths[(depths .< min_depth).||(depths .> max_depth)] .= 0.0
         idx_missing = findall(sum(depths, dims = 2)[:, 1] .== 0.0)
         ([], depths, [], idx_missing)
     elseif field == "GT"
@@ -1175,7 +1175,7 @@ function writevcf(
         gt_ad_af = repeat([""], length(genomes.entries))
         for j in eachindex(gt_ad_af)
             g = gt_tmp[j, :]
-            g = g[g.!=""]
+            g = g[g .!= ""]
             g = replace.(g, ref => "0")
             for k in eachindex(alt)
                 g = replace.(g, alt[k] => string(k))
