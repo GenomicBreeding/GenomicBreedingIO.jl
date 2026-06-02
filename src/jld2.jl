@@ -42,9 +42,23 @@ function readjld2(type::Type{T}; fname::String)::T where {T<:AbstractGB}
     if !isfile(fname)
         throw(ArgumentError("JLD2 file: " * fname * " does not exist."))
     end
-    d = load(fname)
+    d = load(fname);
     struct_name::String = collect(keys(d))[1]
-    x = d[struct_name]
+    x = d[struct_name];
+    # Allow the loading of previous Genomes struct version, i.e. missing `allele_frequencies_homologous_chroms`
+    x = try
+        checkdims(x)
+        x
+    catch
+        y = Genomes(n=length(x.entries), p=length(x.loci_alleles));
+        y.entries = x.entries
+        y.populations = x.populations
+        y.loci_alleles = x.loci_alleles
+        y.allele_frequencies = x.allele_frequencies
+        y.allele_frequencies_homologous_chroms = nothing
+        y.mask = x.mask
+        y
+    end
     if !checkdims(x)
         throw(DimensionMismatch(struct_name * " struct from the JLD2 file: " * fname * " is corrupted ☹."))
     end
