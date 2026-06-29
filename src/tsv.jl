@@ -758,7 +758,7 @@ Load a `Trials` struct from a string-delimited file.
 The input file must contain the following 10 identifier columns:
 - `years`: Year identifiers
 - `seasons`: Season identifiers
-- `harvests`: Harvest identifiers
+- `measurements`: Harvest identifiers
 - `sites`: Site identifiers
 - `entries`: Entry identifiers
 - `populations`: Population identifiers
@@ -821,8 +821,18 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
     header::Vector{String} = split(readline(file), sep)
     close(file)
     # Expected minimum header/column names
-    expected_colnames =
-        ["years", "seasons", "harvests", "sites", "entries", "populations", "replications", "blocks", "rows", "cols"]
+    expected_colnames = [
+        "years",
+        "seasons",
+        "measurements",
+        "sites",
+        "entries",
+        "populations",
+        "replications",
+        "blocks",
+        "rows",
+        "cols",
+    ]
     idx_expected_colnames = []
     for name in expected_colnames
         # name = expected_colnames[4]
@@ -894,7 +904,7 @@ function readdelimited(type::Type{Trials}; fname::String, sep::String = "\t", ve
             i += 1
             trials.years[i] = line[idx_expected_colnames[1]]
             trials.seasons[i] = line[idx_expected_colnames[2]]
-            trials.harvests[i] = line[idx_expected_colnames[3]]
+            trials.measurements[i] = line[idx_expected_colnames[3]]
             trials.sites[i] = line[idx_expected_colnames[4]]
             trials.entries[i] = line[idx_expected_colnames[5]]
             trials.populations[i] = line[idx_expected_colnames[6]]
@@ -979,7 +989,7 @@ Header line is prefixed with '#' and contains column names.
 ## Fixed Columns (1-10)
 1. years
 2. seasons  
-3. harvests
+3. measurements
 4. sites
 5. entries
 6. populations 
@@ -1003,7 +1013,7 @@ Header line is prefixed with '#' and contains column names.
 
 # Examples
 ```jldoctest; setup = :(using GenomicBreedingCore, GenomicBreedingIO)
-julia> trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.harvests = ["harvest_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"];
+julia> trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.measurements = ["measurement_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"];
 
 julia> writedelimited(trials, fname="test_trials.tsv")
 "test_trials.tsv"
@@ -1016,7 +1026,7 @@ function writedelimited(
     overwrite::Bool = false,
     verbose::Bool = false,
 )::String
-    # trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.harvests = ["harvest_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing;
+    # trials = Trials(n=1, t=2); trials.years = ["year_1"]; trials.seasons = ["season_1"]; trials.measurements = ["measurement_1"]; trials.sites = ["site_1"]; trials.entries = ["entry_1"]; trials.populations = ["population_1"]; trials.replications = ["replication_1"]; trials.blocks = ["block_1"]; trials.rows = ["row_1"]; trials.cols = ["col_1"]; trials.traits = ["trait_1", "trait_2"]; sep::String = "\t"; fname = missing;
     # Check input arguments
     if !checkdims(trials)
         throw(DimensionMismatch("Trials input is corrupted ☹."))
@@ -1054,7 +1064,7 @@ function writedelimited(
         header::Vector{String} = [
             "#years",
             "seasons",
-            "harvests",
+            "measurements",
             "sites",
             "entries",
             "populations",
@@ -1074,7 +1084,7 @@ function writedelimited(
             line::Vector{String} = [
                 trials.years[i],
                 trials.seasons[i],
-                trials.harvests[i],
+                trials.measurements[i],
                 trials.sites[i],
                 trials.entries[i],
                 trials.populations[i],

@@ -50,7 +50,7 @@ function readjld2(type::Type{T}; fname::String)::T where {T<:AbstractGB}
         checkdims(x)
         x
     catch
-        y = Genomes(n=length(x.entries), p=length(x.loci_alleles));
+        y = Genomes(n = length(x.entries), p = length(x.loci_alleles));
         y.entries = x.entries
         y.populations = x.populations
         y.loci_alleles = x.loci_alleles
@@ -134,7 +134,7 @@ julia> simulated_effects_reloaded = load("test_simulated_effects.jld2");
 julia> simulated_effects_reloaded[collect(keys(simulated_effects_reloaded))[1]] == simulated_effects
 true
 
-julia> trials, _simulated_effects = GenomicBreedingCore.simulatetrials(genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false), n_years=1, n_seasons=1, n_harvests=1, n_sites=1, n_replications=10, verbose=false);
+julia> trials, _simulated_effects = GenomicBreedingCore.simulatetrials(genomes = GenomicBreedingCore.simulategenomes(n=10, verbose=false), n_years=1, n_seasons=1, n_measurements=1, n_sites=1, n_replications=10, verbose=false);
 
 julia> tebv = analyse(trials, max_levels=50, verbose=false);
 
