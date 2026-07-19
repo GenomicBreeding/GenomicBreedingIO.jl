@@ -691,6 +691,7 @@ function vcfextractallelefreqs!(
     field::String,
     min_depth::Int64 = 10,
     max_depth::Int64 = 100,
+    ploidy::Union{Nothing,Int64} = nothing,
     verbose::Bool = false,
 )
     # Parse coordinates
@@ -957,6 +958,7 @@ function readvcf(;
                 field = field,
                 min_depth = min_depth,
                 max_depth = max_depth,
+                ploidy = ploidy,
                 verbose = verbose,
             )
         end
