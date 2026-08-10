@@ -245,7 +245,7 @@ function vcfextractentriesandformats(fname::String; verbose::Bool = false)::Tupl
     end
     header_line = ""
     for raw_line in eachline(file)
-        if !isnothing(match(r"^#CHR", raw_line))
+        if occursin(r"^#CHR", raw_line)
             header_line = raw_line
             break
         end
@@ -287,10 +287,10 @@ function vcfextractentriesandformats(fname::String; verbose::Bool = false)::Tupl
     end
     format_lines::Vector{String} = []
     for raw_line in eachline(file)
-        if !isnothing(match(r"^##FORMAT", raw_line))
+        if occursin(r"^##FORMAT", raw_line)
             push!(format_lines, raw_line)
         end
-        if isnothing(match(r"^#", raw_line))
+        if !occursin(r"^#", raw_line)
             break
         end
     end
