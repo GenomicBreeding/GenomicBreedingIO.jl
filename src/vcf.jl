@@ -356,19 +356,19 @@ function vcfextractinfo(
     IDX::Int64 = 10
     # Choose field where priority order starts with AF with the highest priority followed by AD, and finally GT
     idx = if field == "any"
-        idx = findall(.!isnothing.(match.(r"ID=AF", format_lines)))
+        idx = findall(occursin.(r"ID=AF", format_lines))
         if length(idx) == 0
-            idx = findall(.!isnothing.(match.(r"ID=AD", format_lines)))
+            idx = findall(occursin.(r"ID=AD", format_lines))
         end
         if length(idx) == 0
-            idx = findall(.!isnothing.(match.(r"ID=GT", format_lines)))
+            idx = findall(occursin.(r"ID=GT", format_lines))
         end
         if length(idx) == 0
             throw(ArgumentError("The input vcf file: `" * fname * "` does not have `AF`, `AD`, or `GT` genotype fields."))
         end
         idx
     else
-        idx = findall(.!isnothing.(match.(Regex(field), format_lines)))
+        idx = findall(occursin.(Regex(field), format_lines))
         if length(idx) == 0
             throw(ArgumentError("The input vcf file: `" * fname * "` does not have `" * field * "` field."))
         end
@@ -379,7 +379,7 @@ function vcfextractinfo(
         println("Identifying data field...")
     end
     format_details = split(format_lines[idx[1]], ",")
-    field = split(format_details[.!isnothing.(match.(r"ID=", format_details))][1], "=")[end]
+    field = split(format_details[occursin.(r"ID=", format_details)][1], "=")[end]
     n_alleles, ploidy = if field == "GT"
         # Computationally expensive allele counting for field=="GT":
         file =
@@ -415,7 +415,7 @@ function vcfextractinfo(
     else
         # Easy n_alleles extraction for "AF" and "AD" fields
         n_alleles = try
-            number = split(format_details[.!isnothing.(match.(r"Number=", format_details))][1], "=")[end]
+            number = split(format_details[occursin.(r"Number=", format_details)][1], "=")[end]
             if number == "R"
                 2
             else
