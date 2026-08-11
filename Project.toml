@@ -1,6 +1,6 @@
 name = "GenomicBreedingIO"
 uuid = "f6f5bf5f-7369-4de1-9a2f-51e3ce5e0754"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["jeffersonparil@gmail.com"]
 
 [deps]
