@@ -21,3 +21,20 @@ julia --project=. --threads=2,1 --load test/interactive_prelude.jl
 time julia --project=. --threads=2 -e "using Pkg; Pkg.update()"
 time julia --project=. --threads=2  test/cli_tester.jl
 ```
+
+### Force stable docs on new release:
+
+First create a new release and if the stable don't get updated then try the following:
+
+```shell
+TAG=v0.3.0 # should match the release tag you created on Github
+git push origin :refs/tags/$TAG
+git tag -d $TAG
+git tag $TAG
+git push origin $TAG
+git show ${TAG}:Project.toml
+git branch --contains $TAG
+git switch gh-pages
+git pull
+git branch --contains v0.3.0
+```
